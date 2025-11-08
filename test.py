@@ -71,7 +71,7 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Streamlit Setup ---
 st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
-st.title(" Financial Data Chatbot ")
+st.title("💬 Financial Data Chatbot (AI + Context Memory + Summaries)")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -94,13 +94,16 @@ if user_input:
     # ========== 1️⃣ Dynamic Keyword-Based Revenue ========== #
     if "revenue" in q or any(w in q for w in ["total", "amount", "show"]):
         exclude_words = {
-            "revenue","amount","total","show","what","is","the","for",
-            "by","month","year","in","of","from","this","that","wise"
+            "revenue","amount","total","show","what","is","the","for","by","month","year",
+            "in","of","from","this","that","wise","need","and","want","data","give","me",
+            "require","tell","get","calculate","display","find","list","please","all"
         }
-        words = [w for w in re.findall(r"[a-zA-Z]+", q) if w not in exclude_words and len(w) > 2]
-        keywords = [w for w in words if not w.isdigit()]
 
-        # Save or reuse context keywords
+        # Tokenize and filter out filler words
+        words = [w for w in re.findall(r"[a-zA-Z]+", q) if w.lower() not in exclude_words and len(w) > 2]
+        keywords = [w.lower() for w in words if not w.isdigit()]
+
+        # Save or reuse last context keywords
         if keywords:
             st.session_state["last_keywords"] = keywords
         else:
