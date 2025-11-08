@@ -34,8 +34,8 @@ if API_KEY and genai:
 
 # --- Paths (edit if needed) ---
 DATA_PATH = "data/Revenue File.xlsx"
-PARTY_PATH = "/mnt/data/PartyName.txt"      # uploaded party list (fallback to df if missing)
-LEDGER_PATH = "/mnt/data/Ledger Name.txt"   # uploaded ledger list (fallback to df if missing)
+PARTY_PATH = "data/PartyName.txt"      # uploaded party list (fallback to df if missing)
+LEDGER_PATH = "data/Ledger Name.txt"   # uploaded ledger list (fallback to df if missing)
 
 # --- Utilities: normalization / text helpers ---
 def normalize_text(s: str) -> str:
@@ -432,7 +432,7 @@ df = ensure_party_norm_in_df(df)
 
 # --- Streamlit UI setup ---
 st.set_page_config(page_title="Financial Data Chatbot", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot — Ledger & Party aware (charts only when asked)")
+st.title("Financial Data Chatbot ")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
