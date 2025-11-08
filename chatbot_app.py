@@ -55,7 +55,7 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Streamlit Setup ---
 st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
-st.title("💬 Financial Data Chatbot (AI + Visual Insights)")
+st.title("💬 Financial Data Chatbot")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -162,3 +162,4 @@ if user_input:
                 plot_revenue_chart(revenue_by_month, "month", "revenue", "Revenue by Month", kind="line")
 
     st.session_state.messages.append({"role": "model", "content": answer})
+
