@@ -313,10 +313,10 @@ if user_input:
             plot_chart(chart_df, "month", "value", f"Revenue for {month_label} {year_val}", kind="bar")
             # set context to that month/year (no party)
             st.session_state["last_context_type"] = None
-            continue
+            st.stop()
         else:
             push_model("No date column available in dataset to filter by month/year.")
-            continue
+            st.stop()
 
     # -------------- exact entity detection (party/ledger) --------------
     ent_type, ent_name = detect_exact_entity(q)
@@ -378,7 +378,7 @@ if user_input:
                 st.write("")
                 st.write("📈 Year-wise Revenue (All Data)")
                 plot_chart(ydf, "year", "value", "Year-wise Revenue (All Data)", kind="bar")
-        continue
+        st.stop()
 
     if wants_chart and wants_month:
         last_keywords = st.session_state.get("last_keywords", [])
@@ -430,7 +430,7 @@ if user_input:
                 st.write("")
                 st.write("📈 Monthly Revenue (All Data)")
                 plot_chart(mdf, "month", "value", "Monthly Revenue (All Data)", kind="bar")
-        continue
+        st.stop()
 
     # -------------- follow-ups: year/month (without 'plot' token) --------------
     if wants_year or wants_month:
@@ -440,12 +440,12 @@ if user_input:
             regex = last_keywords_to_regex([norm(last_keywords[0])])
             if "partyname" not in df.columns:
                 push_model("⚠️ 'partyname' column not found in dataset.")
-                continue
+                st.stop()
             mask = revenue_mask(df) & df["partyname"].str.contains(regex, case=False, na=False)
             subset = df[mask]
             if subset.empty:
                 push_model(f"⚠️ No data found for {' / '.join(last_keywords)}.")
-                continue
+                st.stop()
             if wants_month:
                 grouped = subset.groupby(subset["date"].dt.month)["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"})
                 grouped["month"] = grouped["month"].map({1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"})
@@ -462,18 +462,18 @@ if user_input:
             st.write("")
             st.write(f"📈 {title}")
             plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
-            continue
+            st.stop()
         elif last_keywords and ctx_type == "ledger":
             ledger_col = "ledger_name" if "ledger_name" in df.columns else "ledger" if "ledger" in df.columns else None
             if not ledger_col:
                 push_model("⚠️ ledger column not found in dataset.")
-                continue
+                st.stop()
             regex = last_keywords_to_regex([norm(last_keywords[0])])
             mask = revenue_mask(df) & df[ledger_col].str.contains(regex, case=False, na=False)
             subset = df[mask]
             if subset.empty:
                 push_model(f"⚠️ No data found for {' / '.join(last_keywords)}.")
-                continue
+                st.stop()
             if wants_month:
                 grouped = subset.groupby(subset["date"].dt.month)["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"})
                 grouped["month"] = grouped["month"].map({1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"})
@@ -490,7 +490,7 @@ if user_input:
             st.write("")
             st.write(f"📈 {title}")
             plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
-            continue
+            st.stop()
         else:
             if wants_month:
                 grouped = compute_revenue_by_month(df)
@@ -508,7 +508,7 @@ if user_input:
                 st.write("")
                 st.write(f"📈 {title}")
                 plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
-            continue
+            st.stop()
 
     # -------------- generic total revenue queries (no category) --------------
     if re.search(r"\b(total\s+revenue|what\s+is\s+the\s+total\s+revenue|total\s+revenue\s+this\s+month|total\s+revenue\s+in\s+\d{4})\b", q) \
@@ -533,7 +533,7 @@ if user_input:
             total = compute_total_revenue(df)
             resp_text = f"Total revenue (all data): {format_currency(total)}"
             push_model(resp_text)
-        continue
+        st.stop()
 
     # -------------- category / keyword-based revenue --------------
     if "revenue" in q:
@@ -548,17 +548,17 @@ if user_input:
         ctx_type = st.session_state.get("last_context_type")
         if not last_keywords:
             push_model("⚠️ Please specify a category or party (e.g., 'hostel', 'mess', 'canteen') or ask generic 'total revenue'.")
-            continue
+            st.stop()
         if ctx_type == "party":
             regex = last_keywords_to_regex([norm(last_keywords[0])])
             if "partyname" not in df.columns:
                 push_model("⚠️ 'partyname' column not found in dataset.")
-                continue
+                st.stop()
             mask = revenue_mask(df) & df["partyname"].str.contains(regex, case=False, na=False)
             subset = df[mask]
             if subset.empty:
                 push_model(f"⚠️ No transactions found for {' / '.join(last_keywords)}.")
-                continue
+                st.stop()
             total = subset["amount"].sum()
             monthly = subset.groupby(subset["date"].dt.to_period("M"))["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"})
             monthly["month"] = monthly["month"].astype(str)
@@ -570,18 +570,18 @@ if user_input:
                 kind = "bar" if wants_chart else "line"
                 plot_chart(monthly, "month", "value", f"Monthly Trend – {' / '.join(last_keywords)}", kind=kind)
             st.session_state.messages.append({"role":"model","content":resp_text})
-            continue
+            st.stop()
         elif ctx_type == "ledger":
             ledger_col = "ledger_name" if "ledger_name" in df.columns else "ledger" if "ledger" in df.columns else None
             if not ledger_col:
                 push_model("⚠️ ledger column not found in dataset.")
-                continue
+                st.stop()
             regex = last_keywords_to_regex([norm(last_keywords[0])])
             mask = revenue_mask(df) & df[ledger_col].str.contains(regex, case=False, na=False)
             subset = df[mask]
             if subset.empty:
                 push_model(f"⚠️ No transactions found for {' / '.join(last_keywords)}.")
-                continue
+                st.stop()
             total = subset["amount"].sum()
             monthly = subset.groupby(subset["date"].dt.to_period("M"))["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"})
             monthly["month"] = monthly["month"].astype(str)
@@ -593,10 +593,10 @@ if user_input:
                 kind = "bar" if wants_chart else "line"
                 plot_chart(monthly, "month", "value", f"Monthly Trend – {' / '.join(last_keywords)}", kind=kind)
             st.session_state.messages.append({"role":"model","content":resp_text})
-            continue
+            st.stop()
         else:
             push_model("⚠️ Please specify a category or party (e.g., 'hostel', 'mess', 'canteen') or ask generic 'total revenue'.")
-            continue
+            st.stop()
 
     # -------------- receipts/payments/net intent detection --------------
     if any(w in q for w in ["receipts", "payments", "net", "balance", "inflow", "outflow"]):
@@ -611,7 +611,7 @@ if user_input:
             receipts, payments, net = receipts_payments_net_for_period(df, start, end)
             resp = f"Receipts: {format_currency(receipts)}\nPayments: {format_currency(payments)}\nNet balance: {format_currency(net)}"
             push_model(resp, display_as_markdown=False)
-            continue
+            st.stop()
         elif year_m:
             yv = int(year_m.group(1))
             start = pd.Timestamp(year=yv, month=1, day=1)
@@ -619,7 +619,7 @@ if user_input:
             receipts, payments, net = receipts_payments_net_for_period(df, start, end)
             resp = f"Receipts in {yv}: {format_currency(receipts)}\nPayments in {yv}: {format_currency(payments)}\nNet: {format_currency(net)}"
             push_model(resp, display_as_markdown=False)
-            continue
+            st.stop()
         else:
             # if no period specified, give overall receipts/payments/net
             receipts = df.loc[revenue_mask(df), "amount"].sum()
@@ -627,7 +627,7 @@ if user_input:
             net = receipts - payments
             resp = f"Total Receipts: {format_currency(receipts)}\nTotal Payments: {format_currency(payments)}\nNet: {format_currency(net)}"
             push_model(resp, display_as_markdown=False)
-            continue
+            st.stop()
 
     # -------------- fallback: use model or preview --------------
     if MODEL:
