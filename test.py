@@ -37,7 +37,7 @@ DATA_PATH = "data/Revenue File.xlsx"
 PARTY_PATH = "/mnt/data/PartyName.txt"
 LEDGER_PATH = "/mnt/data/Ledger Name.txt"
 
-# --- Utilities: normalization / text helpers ---
+# --- Utilities ---
 def normalize_text(s: str) -> str:
     if pd.isna(s):
         return ""
@@ -64,7 +64,6 @@ def extract_monthname_and_year(q: str) -> Optional[Tuple[int,int]]:
 # --- Load dataset ---
 @st.cache_data(ttl=600)
 def load_data(file_path: str = DATA_PATH, sheet_name: str = "Revenue") -> pd.DataFrame:
-    """Load Excel and normalize columns/ types. Returns empty DataFrame if file missing."""
     if not os.path.exists(file_path):
         return pd.DataFrame()
     try:
@@ -74,24 +73,20 @@ def load_data(file_path: str = DATA_PATH, sheet_name: str = "Revenue") -> pd.Dat
             df = pd.read_excel(file_path)
         except Exception:
             return pd.DataFrame()
-    # normalize column names
     df.columns = [normalize_text(c).replace(" ", "_") for c in df.columns.astype(str)]
     df = df.dropna(how="all").copy()
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     if "amount" in df.columns:
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
-    # ensure strings
     for c in df.select_dtypes(["object"]).columns:
         df[c] = df[c].astype(str).str.strip()
-    # add normalized party column if partyname exists
     if "partyname" in df.columns:
         df["_party_norm"] = df["partyname"].fillna("").map(normalize_text)
     return df
 
 @st.cache_data(ttl=600)
 def load_list_from_file(path: str, df_col: Optional[pd.Series] = None) -> List[str]:
-    """Load values from text file if present, else derive from a dataframe column series."""
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -106,10 +101,6 @@ def load_list_from_file(path: str, df_col: Optional[pd.Series] = None) -> List[s
 
 # --- Business masks ---
 def revenue_mask(df: pd.DataFrame) -> pd.Series:
-    """
-    Revenue rows: vouchertype == 'Receipt', amount_type == 'Cr', amount > 0
-    If columns missing, returns all-False mask.
-    """
     if df.empty:
         return pd.Series([False] * 0, index=df.index)
     if not all(c in df.columns for c in ("vouchertype", "amount_type", "amount")):
@@ -127,7 +118,7 @@ def payments_mask(df: pd.DataFrame) -> pd.Series:
     amt = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
     return (vt == "payment") & (at == "dr") & (amt > 0)
 
-# --- Party & Ledger matching helpers (STRICT whole-word matching + fallback) ---
+# --- Matching helpers ---
 def ensure_party_norm_in_df(df: pd.DataFrame) -> pd.DataFrame:
     if "partyname" in df.columns and "_party_norm" not in df.columns:
         df["_party_norm"] = df["partyname"].fillna("").map(normalize_text)
@@ -140,16 +131,12 @@ def find_party_matches(
     fuzz_threshold: int = 80,
     strict: bool = True,
     require_all_tokens: bool = True
-) -> List[Tuple[str, float]]:
-    """
-    Return list of (original_partyname, score).
-    Strict mode uses whole-word token matches (recommended). Fallback to loose/fuzzy if needed.
-    """
+) -> List[tuple]:
     q = normalize_text(query)
     if not q:
         return []
     df = ensure_party_norm_in_df(df)
-    matches: List[Tuple[str, float]] = []
+    matches = []
     tokens = [t for t in re.findall(r"\w+", q) if len(t) > 2]
 
     if strict and tokens:
@@ -167,14 +154,12 @@ def find_party_matches(
                 matches.append((name, 100.0))
             return matches[:top_n]
 
-    # loose substring match
     mask_sub = df["_party_norm"].str.contains(re.escape(q), case=False, na=False)
     if mask_sub.any():
         for name in df.loc[mask_sub, "partyname"].unique():
             matches.append((name, 100.0))
         return matches[:top_n]
 
-    # token presence
     if tokens:
         token_mask = df["_party_norm"].apply(lambda s: all(tok in s for tok in tokens))
         if token_mask.any():
@@ -182,7 +167,6 @@ def find_party_matches(
                 matches.append((name, 95.0))
             return matches[:top_n]
 
-    # fuzzy fallback
     if _HAS_FUZZ:
         candidates = list(df["partyname"].dropna().astype(str).unique())
         results = process.extract(q, candidates, scorer=fuzz.WRatio, limit=top_n)
@@ -198,10 +182,6 @@ def find_group_from_query_using_list(
     strict: bool = True,
     require_all_tokens: bool = True
 ) -> List[str]:
-    """
-    Best-effort: return list entries from value_list that match the query.
-    Strict=whole-word matching; strict=False uses substring search.
-    """
     q = normalize_text(query)
     tokens = [t for t in re.findall(r"\w+", q) if len(t) > 2]
     if not tokens:
@@ -326,24 +306,14 @@ def build_summary(grouped: pd.DataFrame, label_kind: str) -> str:
                    f"• Highest in {max_label}: {format_currency(max_val)}")
     return summary
 
-# --- NEW: direct data query handler (answers simple requests via pandas) ---
+# --- Direct data queries handler ---
 def handle_direct_data_queries(df: pd.DataFrame, q: str) -> Optional[str]:
-    """
-    Detect and answer questions like:
-      - "how many party name total"
-      - "count unique ledger_name"
-      - "what are the different voucher types"
-      - "show columns"
-    Returns a text response if handled, else None.
-    """
     if df is None or df.empty:
         return None
     ql = q.lower()
-    # quick "show columns"
     if re.search(r"\b(columns|show columns|list columns)\b", ql):
         cols = df.columns.tolist()
         return "Columns: " + ", ".join(cols)
-    # mapping of common aliases to actual column names (extend if your sheet uses different names)
     possible_columns = {
         "partyname": ["party name", "partyname", "party"],
         "ledger_name": ["ledger name", "ledger_name", "ledger", "ledgername"],
@@ -351,7 +321,6 @@ def handle_direct_data_queries(df: pd.DataFrame, q: str) -> Optional[str]:
         "amount_type": ["amount type", "amount_type"],
         "date": ["date", "month", "year", "transaction date"]
     }
-    # reverse lookup: detect which column user refers to
     detected_col = None
     for col, aliases in possible_columns.items():
         for a in aliases:
@@ -361,9 +330,8 @@ def handle_direct_data_queries(df: pd.DataFrame, q: str) -> Optional[str]:
                     break
         if detected_col:
             break
-    # handle requests
     if detected_col:
-        if re.search(r"\b(how many|count|number of|how many different|total)\b", ql):
+        if re.search(r"\b(how many|count|number of|how many different|distinct|unique)\b", ql):
             cnt = int(df[detected_col].nunique(dropna=True))
             return f"There are **{cnt} unique values** in the `{detected_col}` column."
         if re.search(r"\b(list|show|what are|different|distinct)\b", ql):
@@ -376,32 +344,32 @@ def handle_direct_data_queries(df: pd.DataFrame, q: str) -> Optional[str]:
             if col in ql:
                 cnt = int(df[col].nunique(dropna=True))
                 return f"There are **{cnt} unique values** in the `{col}` column."
+    # Voucher types quick answer
+    if "voucher" in ql or "voucher type" in ql or "vouchertype" in ql:
+        if "vouchertype" in df.columns:
+            uniques = df["vouchertype"].dropna().unique().tolist()
+            sample = ", ".join(map(str, uniques[:20]))
+            more = f" (+{len(uniques)-20} more)" if len(uniques) > 20 else ""
+            return f"The vouchertype column has {len(uniques)} unique values. Examples: {sample}{more}"
     return None
 
-# --- NEW: top-ledgers handler (answers "top N ledgers" queries) ---
+# --- Top-ledgers handler (only when clear revenue/top intent) ---
 def handle_top_ledgers_query(df: pd.DataFrame, q: str) -> Optional[str]:
-    """
-    Detect queries like 'top N ledgers' or 'highest revenue ledgers' and compute results.
-    Returns text summary; stores last_grouped_df for optional plotting.
-    """
     if df.empty or "ledger_name" not in df.columns:
         return None
     ql = q.lower()
-    # detect "top N" otherwise default to 3
+    # require explicit revenue/top intent to avoid false positive
+    if not (re.search(r"\b(top\s*\d+|top\s+ledgers|highest|highest\s+ledger)\b", ql) or "revenue" in ql):
+        return None
     m = re.search(r"top\s*(\d+)", ql)
     top_n = int(m.group(1)) if m else 3
-    if "ledger" not in ql and "ledgers" not in ql:
-        return None
-    # apply revenue mask
     rev_mask = revenue_mask(df)
     df_rev = df.loc[rev_mask & df["ledger_name"].notna()].copy()
     if df_rev.empty:
         return "No revenue data found for ledgers."
-    # restrict to this year if user asks about this year/current year/financial year
     if "this year" in ql or "current year" in ql or "financial year" in ql or "this financial year" in ql:
         year_now = pd.Timestamp.now().year
         df_rev = df_rev[df_rev["date"].dt.year == year_now]
-    # group and sort
     grouped = (
         df_rev.groupby("ledger_name")["amount"]
         .sum()
@@ -413,40 +381,29 @@ def handle_top_ledgers_query(df: pd.DataFrame, q: str) -> Optional[str]:
     if grouped.empty:
         return "No ledger revenue found for the requested period."
     top_df = grouped.head(top_n)
-    # summary lines
-    lines = []
-    for i, row in top_df.iterrows():
-        lines.append(f"**{i+1}. {row['ledger_name']}** — {format_currency(row['revenue'])}")
+    lines = [f"**{i+1}. {row['ledger_name']}** — {format_currency(row['revenue'])}" for i, row in top_df.iterrows()]
     summary_text = f"📊 **Top {top_n} Ledgers by Revenue:**\n" + "\n".join(lines)
-    # persist for optional plotting
     st.session_state.last_grouped_df = top_df.rename(columns={"ledger_name": "Ledger", "revenue":"value"})[["Ledger","value"]].copy()
     st.session_state.last_grouped_title = f"Top {top_n} Ledgers by Revenue"
     st.session_state.last_grouped_kind = "bar"
     return summary_text
 
-# --- NEW: top-party contributors handler (by % threshold or top N) ---
+# --- Top-party contributors handler (only when explicit revenue/percent/top intent) ---
 def handle_top_party_contributors(df: pd.DataFrame, q: str) -> Optional[str]:
-    """
-    Detect queries asking for parties contributing over a % of total revenue
-    or top N contributors by revenue.
-    """
     if df.empty or "partyname" not in df.columns:
         return None
     ql = q.lower()
-    if "party" not in ql and "parties" not in ql and "partyname" not in ql:
+    # require revenue/percent/top indicators to avoid false positive
+    if not (re.search(r"(\d+\s*%|\d+\s*percent)|\b(top\s*\d+|top\s+part(y|ies)|contributors|contribute|contribution|contributes|contributing)\b", ql) or "revenue" in ql):
         return None
-    # detect percentage threshold like 'over 5%' or 'greater than 5 percent'
     m = re.search(r"(\d+(?:\.\d+)?)\s*%|\b(\d+(?:\.\d+)?)\s*percent", ql)
     threshold = float(m.group(1) or m.group(2)) if m else None
-    # detect top N
     n_match = re.search(r"top\s*(\d+)", ql)
     top_n = int(n_match.group(1)) if n_match else None
-
     rev_mask = revenue_mask(df)
     df_rev = df.loc[rev_mask & df["partyname"].notna()].copy()
     if df_rev.empty:
         return "No revenue data found for parties."
-
     grouped = (
         df_rev.groupby("partyname")["amount"]
         .sum()
@@ -458,9 +415,7 @@ def handle_top_party_contributors(df: pd.DataFrame, q: str) -> Optional[str]:
     total = grouped["revenue"].sum()
     if total == 0:
         return "Total revenue is zero; cannot compute contributions."
-
     grouped["pct"] = (grouped["revenue"] / total * 100).round(2)
-
     if threshold:
         subset = grouped[grouped["pct"] >= threshold]
         if subset.empty:
@@ -472,14 +427,8 @@ def handle_top_party_contributors(df: pd.DataFrame, q: str) -> Optional[str]:
     else:
         subset = grouped.head(5)
         title = "Top 5 Party Contributors by Revenue"
-
-    lines = [
-        f"**{i+1}. {row['partyname']}** — {format_currency(row['revenue'])} ({row['pct']}%)"
-        for i, row in subset.iterrows()
-    ]
+    lines = [f"**{i+1}. {row['partyname']}** — {format_currency(row['revenue'])} ({row['pct']}%)" for i, row in subset.iterrows()]
     summary_text = f"📊 **{title}:**\n" + "\n".join(lines)
-
-    # persist for optional plotting
     st.session_state.last_grouped_df = subset.rename(columns={"partyname": "Party", "revenue": "value"})[["Party","value"]].copy()
     st.session_state.last_grouped_title = title
     st.session_state.last_grouped_kind = "bar"
@@ -491,9 +440,9 @@ party_list = load_list_from_file(PARTY_PATH, df["partyname"] if "partyname" in d
 ledger_list = load_list_from_file(LEDGER_PATH, df["ledger_name"] if "ledger_name" in df.columns else None)
 df = ensure_party_norm_in_df(df)
 
-# --- Streamlit UI setup ---
+# --- Streamlit UI ---
 st.set_page_config(page_title="Financial Data Chatbot", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot ")
+st.title("Financial Data Chatbot")   # <-- exact title requested
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -504,7 +453,6 @@ if "last_grouped_title" not in st.session_state:
 if "last_grouped_kind" not in st.session_state:
     st.session_state.last_grouped_kind = "bar"
 
-# show chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -543,7 +491,7 @@ if user_input:
     else:
         handled = False
 
-    # ---------- PRIORITY: top-ledgers (run before direct data queries) ----------
+    # priority: top-ledgers
     if not handled:
         top_ledger_resp = handle_top_ledgers_query(df, q)
         if top_ledger_resp:
@@ -552,7 +500,7 @@ if user_input:
                 plot_chart(st.session_state.last_grouped_df, st.session_state.last_grouped_df.columns[0], "value", st.session_state.last_grouped_title)
             handled = True
 
-    # ---------- PRIORITY: top-party contributors (run before direct data queries) ----------
+    # priority: top-party contributors
     if not handled:
         top_party_resp = handle_top_party_contributors(df, q)
         if top_party_resp:
@@ -561,14 +509,14 @@ if user_input:
                 plot_chart(st.session_state.last_grouped_df, st.session_state.last_grouped_df.columns[0], "value", st.session_state.last_grouped_title)
             handled = True
 
-    # ---------- DIRECT DATA QUERIES (unique/list of columns etc.) ----------
+    # direct data queries (counts, lists, voucher types, etc.)
     if not handled:
         direct_resp = handle_direct_data_queries(df, q)
         if direct_resp:
             push_model(direct_resp)
             handled = True
 
-    # ---------- Specific month + year (e.g., April 2020) ----------
+    # month + year specific
     if not handled:
         my = extract_monthname_and_year(q)
         if my:
@@ -590,7 +538,7 @@ if user_input:
             st.session_state.last_grouped_kind = "bar"
             handled = True
 
-    # ---------- Yearwise/monthwise overall or with plot intent ----------
+    # year/month overall or with chart intent
     if not handled:
         wants_year = bool(re.search(r"\b(yearwise|year\s*wise|year|annual|annually)\b", q))
         wants_month = bool(re.search(r"\b(monthwise|month\s*wise|month|monthly)\b", q))
@@ -615,7 +563,7 @@ if user_input:
                 plot_chart(mdf, "month", "value", "Monthly Revenue (All Data)", kind="bar")
             handled = True
 
-    # ---------- Generic total revenue queries (no category) ----------
+    # generic total revenue queries (no category)
     if not handled:
         if re.search(r"\b(total\s+revenue|what\s+is\s+the\s+total\s+revenue|total\s+revenue\s+this\s+month|total\s+revenue\s+in\s+\d{4})\b", q) \
            or ("revenue" in q and ("total" in q or "this month" in q or re.search(r"\b\d{4}\b", q)) and not re.search(r"\b(hostel|mess|canteen|coffee|cantein|coffee lab|party|ledger)\b", q)):
@@ -651,28 +599,23 @@ if user_input:
                 st.session_state.last_grouped_df = None
                 handled = True
 
-    # ---------- Category / party / ledger-based revenue (STRICT matching used) ----------
+    # category / party / ledger-based revenue (STRICT matching used)
     if not handled and "revenue" in q:
-        # First check ledger matches if the question mentions ledger
+        # ledger path
         matched_ledgers = []
         if "ledger" in q or "ledger_name" in q or "ledgername" in q:
             matched_ledgers = find_group_from_query_using_list(q, ledger_list, strict=True, require_all_tokens=True)
-            # fallback to strict fuzzy on df if none
             if not matched_ledgers:
                 if "ledger_name" in df.columns:
-                    # use party-matching helper by temporarily renaming df column to reuse function
                     temp_df = df.copy()
                     temp_df["partyname"] = temp_df["ledger_name"]
                     temp_df["_party_norm"] = temp_df["partyname"].map(normalize_text)
                     fuzzy_matches = find_party_matches(temp_df, q, top_n=8, fuzz_threshold=80, strict=True, require_all_tokens=True)
                     if fuzzy_matches:
                         matched_ledgers = [m[0] for m in fuzzy_matches]
-            # relax if still nothing
             if not matched_ledgers:
                 matched_ledgers = find_group_from_query_using_list(q, ledger_list, strict=True, require_all_tokens=False)
-
         if matched_ledgers:
-            # compute revenue by ledger_name
             mask = df["ledger_name"].isin(matched_ledgers) & revenue_mask(df)
             year = extract_year_from_query(q)
             if year and "date" in df.columns:
@@ -708,9 +651,8 @@ if user_input:
                 st.session_state.last_grouped_title = f"Revenue – {ledger_label}"
                 st.session_state.last_grouped_kind = "bar"
             handled = True
-
         else:
-            # fallback to party matching (strict)
+            # party path (strict)
             matched_parties = find_group_from_query_using_list(q, party_list, strict=True, require_all_tokens=True)
             if not matched_parties:
                 fuzzy_matches = find_party_matches(df, q, top_n=8, fuzz_threshold=80, strict=True, require_all_tokens=True)
@@ -722,7 +664,6 @@ if user_input:
                 fuzzy_matches = find_party_matches(df, q, top_n=8, fuzz_threshold=75, strict=False, require_all_tokens=True)
                 if fuzzy_matches:
                     matched_parties = [m[0] for m in fuzzy_matches]
-
             if not matched_parties:
                 push_model("⚠️ No party, ledger, or category match found in your query. Try phrasing like 'canteen revenue 2023' or provide the party/ledger name.")
                 handled = True
@@ -763,7 +704,7 @@ if user_input:
                     st.session_state.last_grouped_kind = "bar"
                 handled = True
 
-    # ---------- Fallback: model-based summary or preview ----------
+    # fallback: model or data preview
     if not handled:
         if MODEL:
             df_preview = df.head(5).to_string(index=False) if not df.empty else "Dataset is empty or missing."
@@ -782,6 +723,3 @@ if user_input:
                 push_model("I couldn't detect a specific intent. Here are sample rows from the data:")
                 with st.chat_message("model"):
                     st.dataframe(df.head(10))
-        # end fallback
-
-# End of file
