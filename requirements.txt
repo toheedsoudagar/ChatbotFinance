@@ -3,4 +3,3 @@ google-generativeai
 pandas
 openpyxl
 python-dotenv
-sqlite3-binary
