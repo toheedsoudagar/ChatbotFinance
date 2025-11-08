@@ -41,18 +41,21 @@ def plot_chart(df, x_col, y_col, title, kind="bar"):
             h = bar.get_height()
             ax.annotate(
                 format_currency(h),
-                xy=(bar.get_x() + bar.get_width()/2, h),
+                xy=(bar.get_x() + bar.get_width() / 2, h),
                 xytext=(0, 5),
                 textcoords="offset points",
                 ha="center",
                 fontsize=9,
-                fontweight="bold"
+                fontweight="bold",
             )
     else:
         ax.plot(df[x_col], df[y_col], marker="o", color="#2196F3", linewidth=2)
         for i, v in enumerate(df[y_col]):
             ax.text(i, v, format_currency(v), ha="center", va="bottom", fontsize=9, fontweight="bold")
 
+    # Clean x-axis labels
+    if x_col.lower() == "year":
+        df[x_col] = df[x_col].astype(str)
     ax.set_xlabel(x_col.capitalize(), fontsize=10)
     ax.set_ylabel("Amount (₹)", fontsize=10)
     ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
@@ -123,7 +126,7 @@ if user_input:
                         subset.groupby(subset["date"].dt.to_period("M"))["amount"]
                         .sum()
                         .reset_index()
-                        .rename(columns={"date":"month","amount":"value"})
+                        .rename(columns={"date": "month", "amount": "value"})
                     )
                     monthly["month"] = monthly["month"].astype(str)
                     with st.chat_message("model"):
@@ -157,7 +160,7 @@ if user_input:
                             subset.groupby(subset["date"].dt.month)["amount"]
                             .sum()
                             .reset_index()
-                            .rename(columns={"date":"month","amount":"value"})
+                            .rename(columns={"date": "month", "amount": "value"})
                         )
                         grouped["month"] = grouped["month"].map({
                             1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
@@ -169,8 +172,9 @@ if user_input:
                             subset.groupby(subset["date"].dt.year)["amount"]
                             .sum()
                             .reset_index()
-                            .rename(columns={"date":"year","amount":"value"})
+                            .rename(columns={"date": "year", "amount": "value"})
                         )
+                        grouped["year"] = grouped["year"].astype(int)
                         title = f"Year-wise Revenue – {' / '.join(last_keywords)}"
 
                     with st.chat_message("model"):
