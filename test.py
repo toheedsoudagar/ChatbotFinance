@@ -19,58 +19,18 @@ def load_data(file_path: str, sheet_name: str = "Revenue") -> pd.DataFrame:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df
 
-# --- Revenue Logic ---
-def calculate_revenue(df: pd.DataFrame):
-    """Apply business rule for revenue: Receipt + Cr + amount > 0"""
-    mask = (
+# --- Revenue Rule ---
+def revenue_mask(df):
+    return (
         (df["vouchertype"].str.lower() == "receipt")
         & (df["amount_type"].str.lower() == "cr")
         & (df["amount"] > 0)
     )
-    rev = df[mask]
-    total = rev["amount"].sum()
 
-    by_year = (
-        rev.groupby(rev["date"].dt.year)["amount"]
-        .sum()
-        .reset_index()
-        .rename(columns={"date": "year", "amount": "revenue"})
-    )
-
-    by_month = (
-        rev.groupby(rev["date"].dt.to_period("M"))["amount"]
-        .sum()
-        .reset_index()
-        .rename(columns={"date": "month", "amount": "revenue"})
-    )
-    by_month["month"] = by_month["month"].astype(str)
-    return total, by_year, by_month
-
-# --- Load Data ---
-DATA_PATH = "data/Revenue File.xlsx"
-df = load_data(DATA_PATH)
-total_revenue, revenue_by_year, revenue_by_month = calculate_revenue(df)
-
-# --- Initialize Gemini ---
-model = genai.GenerativeModel("gemini-2.0-flash")
-
-# --- Streamlit Setup ---
-st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
-st.title(" Financial Data Chatbot (AI + Visual Insights)")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# --- Show previous chat history ---
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# --- Helper function: format large values nicely ---
+# --- Chart Helper ---
 def format_currency(val):
     return f"₹{val:,.0f}"
 
-# --- Improved chart with numeric annotations and clean layout ---
 def plot_revenue_chart(df, x_col, y_col, title, kind="bar"):
     fig, ax = plt.subplots(figsize=(8, 4))
     plt.tight_layout(pad=3)
@@ -103,13 +63,23 @@ def plot_revenue_chart(df, x_col, y_col, title, kind="bar"):
     ax.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f"₹{x:,.0f}"))
     st.pyplot(fig)
 
-# --- Revenue mask function ---
-def revenue_mask(df):
-    return (
-        (df["vouchertype"].str.lower() == "receipt")
-        & (df["amount_type"].str.lower() == "cr")
-        & (df["amount"] > 0)
-    )
+# --- Load Data ---
+DATA_PATH = "data/Revenue File.xlsx"
+df = load_data(DATA_PATH)
+
+# --- Initialize Gemini ---
+model = genai.GenerativeModel("gemini-2.0-flash")
+
+# --- Streamlit Setup ---
+st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
+st.title("💬 Financial Data Chatbot (AI + Dynamic Category Search)")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
 # --- Chat Input ---
 user_input = st.chat_input("Ask about your financial data...")
@@ -118,63 +88,84 @@ if user_input:
     st.chat_message("user").markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
     q = user_input.lower()
-    show_chart = False
-    chart_type = None
 
-    # --- Detect revenue-related visual queries ---
-    if "revenue" in q or "receipt" in q:
-        # Check for "by month for year"
-        if ("month" in q and re.search(r"\b(20\d{2})\b", q)):
-            match = re.search(r"\b(20\d{2})\b", q)
-            year = int(match.group(1))
-            if "date" in df.columns:
-                dfy = df[df["date"].dt.year == year]
-                if dfy.empty:
+    # ========== 1️⃣ Dynamic Keyword-Based Revenue by Party ========== #
+    # Automatically detect if user is asking for revenue of a category or party
+    if "revenue" in q and not re.search(r"\b(20\d{2})\b", q):
+        # Extract keyword candidates (e.g., hostel, mess, contractor, rent, etc.)
+        exclude_words = {
+            "revenue", "amount", "total", "show", "what", "is", "the", "for",
+            "by", "month", "year", "in", "of", "from", "this", "that"
+        }
+        words = [w for w in re.findall(r"[a-zA-Z]+", q) if w not in exclude_words and len(w) > 2]
+        keywords = [w for w in words if not w.isdigit()]
+        keyword_str = "|".join(keywords)
+
+        if keywords:
+            # Filter data dynamically
+            if "partyname" in df.columns:
+                mask = revenue_mask(df) & df["partyname"].str.contains(keyword_str, case=False, na=False)
+                subset = df[mask]
+                total = subset["amount"].sum()
+                if subset.empty:
                     with st.chat_message("model"):
-                        st.write(f"⚠️ No transactions found for {year}. Please try another year present in the dataset.")
+                        st.write(f"⚠️ No transactions found for '{' / '.join(keywords)}'.")
                 else:
-                    monthly_rev = (
-                        dfy.loc[revenue_mask(dfy)]
-                        .groupby(dfy["date"].dt.month)["amount"]
+                    monthly = (
+                        subset.groupby(subset["date"].dt.to_period("M"))["amount"]
                         .sum()
                         .reset_index()
+                        .rename(columns={"date": "month", "amount": "revenue"})
                     )
-                    monthly_rev.columns = ["month_num", "revenue"]
-                    monthly_rev["month"] = monthly_rev["month_num"].map({
-                        1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
-                        7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"
-                    })
+                    monthly["month"] = monthly["month"].astype(str)
                     with st.chat_message("model"):
-                        st.write(f"📊 **Revenue by Month for {year}**")
-                        plot_revenue_chart(
-                            monthly_rev, "month", "revenue",
-                            f"Monthly Revenue Trend – {year}", kind="bar"
-                        )
+                        st.write(f"📊 **Total Revenue for '{' / '.join(keywords)}':** {format_currency(total)}")
+                        if not monthly.empty:
+                            plot_revenue_chart(monthly, "month", "revenue", f"Revenue Trend for {' / '.join(keywords)}", kind="bar")
             else:
                 with st.chat_message("model"):
-                    st.write("⚠️ No 'date' column found in the dataset.")
-        # Generic monthly/yearly charts
-        elif "month" in q:
-            show_chart = True
-            chart_type = "month"
-        elif "year" in q:
-            show_chart = True
-            chart_type = "year"
+                    st.write("⚠️ 'partyname' column not found in dataset.")
+        else:
+            # No valid keyword found, fallback to general reasoning
+            context = f"""
+            The dataset has {len(df)} rows and columns: {', '.join(df.columns)}.
+            Example data:
+            {df.head(5).to_string(index=False)}
+            """
+            prompt = f"{context}\nUser: {user_input}"
+            response = model.generate_content(prompt)
+            with st.chat_message("model"):
+                st.markdown(response.text if response and response.text else "I couldn’t generate a response.")
 
-        context = f"""
-        The dataset contains financial transactions.
+    # ========== 2️⃣ Year-specific "Revenue by Month" ========== #
+    elif ("month" in q and re.search(r"\b(20\d{2})\b", q)):
+        match = re.search(r"\b(20\d{2})\b", q)
+        year = int(match.group(1))
+        if "date" in df.columns:
+            dfy = df[df["date"].dt.year == year]
+            if dfy.empty:
+                with st.chat_message("model"):
+                    st.write(f"⚠️ No transactions found for {year}.")
+            else:
+                monthly_rev = (
+                    dfy.loc[revenue_mask(dfy)]
+                    .groupby(dfy["date"].dt.month)["amount"]
+                    .sum()
+                    .reset_index()
+                )
+                monthly_rev.columns = ["month_num", "revenue"]
+                monthly_rev["month"] = monthly_rev["month_num"].map({
+                    1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
+                    7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"
+                })
+                with st.chat_message("model"):
+                    st.write(f"📈 **Revenue by Month for {year}**")
+                    plot_revenue_chart(monthly_rev, "month", "revenue", f"Monthly Revenue – {year}", kind="bar")
+        else:
+            with st.chat_message("model"):
+                st.write("⚠️ No 'date' column found in dataset.")
 
-        Business rule for REVENUE:
-        Include only rows where vouchertype = 'Receipt', amount_type = 'Cr', and amount > 0.
-
-        Computed summaries:
-        • Total Revenue: {total_revenue:,.2f}
-        • Revenue by Year:
-        {revenue_by_year.to_string(index=False)}
-        • Revenue by Month:
-        {revenue_by_month.to_string(index=False)}
-        """
-
+    # ========== 3️⃣ Fallback / Other Queries ========== #
     else:
         context = f"""
         The dataset has {len(df)} rows and columns: {', '.join(df.columns)}.
@@ -182,24 +173,10 @@ if user_input:
         {df.head(5).to_string(index=False)}
         Use reasoning to answer generic questions about data.
         """
+        prompt = f"{context}\nUser: {user_input}"
+        response = model.generate_content(prompt)
+        answer = response.text if response and response.text else "I couldn’t generate a response."
+        with st.chat_message("model"):
+            st.markdown(answer)
 
-    # --- Generate AI response ---
-    prompt = f"{context}\nUser: {user_input}"
-    response = model.generate_content(prompt)
-    answer = response.text if response and response.text else "I couldn’t generate a response."
-
-    # --- Display AI Answer + Chart ---
-    with st.chat_message("model"):
-        st.markdown(answer)
-
-        # Fallback for general charts
-        if show_chart:
-            if chart_type == "year" and not revenue_by_year.empty:
-                st.write("📊 **Revenue by Year (₹)**")
-                plot_revenue_chart(revenue_by_year, "year", "revenue", "Revenue by Year")
-
-            elif chart_type == "month" and not revenue_by_month.empty:
-                st.write("📈 **Revenue by Month (₹)**")
-                plot_revenue_chart(revenue_by_month, "month", "revenue", "Revenue by Month", kind="line")
-
-    st.session_state.messages.append({"role": "model", "content": answer})
+    st.session_state.messages.append({"role": "model", "content": "(answered)"})
