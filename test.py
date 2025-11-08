@@ -34,8 +34,8 @@ if API_KEY and genai:
 
 # --- Paths (edit if needed) ---
 DATA_PATH = "data/Revenue File.xlsx"
-PARTY_PATH = "data/PartyName.txt"      # uploaded party list (fallback to df if missing)
-LEDGER_PATH = "data/Ledger Name.txt"   # uploaded ledger list (fallback to df if missing)
+PARTY_PATH = "/mnt/data/PartyName.txt"
+LEDGER_PATH = "/mnt/data/Ledger Name.txt"
 
 # --- Utilities: normalization / text helpers ---
 def normalize_text(s: str) -> str:
@@ -424,6 +424,67 @@ def handle_top_ledgers_query(df: pd.DataFrame, q: str) -> Optional[str]:
     st.session_state.last_grouped_kind = "bar"
     return summary_text
 
+# --- NEW: top-party contributors handler (by % threshold or top N) ---
+def handle_top_party_contributors(df: pd.DataFrame, q: str) -> Optional[str]:
+    """
+    Detect queries asking for parties contributing over a % of total revenue
+    or top N contributors by revenue.
+    """
+    if df.empty or "partyname" not in df.columns:
+        return None
+    ql = q.lower()
+    if "party" not in ql and "parties" not in ql and "partyname" not in ql:
+        return None
+    # detect percentage threshold like 'over 5%' or 'greater than 5 percent'
+    m = re.search(r"(\d+(?:\.\d+)?)\s*%|\b(\d+(?:\.\d+)?)\s*percent", ql)
+    threshold = float(m.group(1) or m.group(2)) if m else None
+    # detect top N
+    n_match = re.search(r"top\s*(\d+)", ql)
+    top_n = int(n_match.group(1)) if n_match else None
+
+    rev_mask = revenue_mask(df)
+    df_rev = df.loc[rev_mask & df["partyname"].notna()].copy()
+    if df_rev.empty:
+        return "No revenue data found for parties."
+
+    grouped = (
+        df_rev.groupby("partyname")["amount"]
+        .sum()
+        .reset_index()
+        .rename(columns={"amount": "revenue"})
+        .sort_values("revenue", ascending=False)
+        .reset_index(drop=True)
+    )
+    total = grouped["revenue"].sum()
+    if total == 0:
+        return "Total revenue is zero; cannot compute contributions."
+
+    grouped["pct"] = (grouped["revenue"] / total * 100).round(2)
+
+    if threshold:
+        subset = grouped[grouped["pct"] >= threshold]
+        if subset.empty:
+            return f"No parties contribute over {threshold}% of total revenue."
+        title = f"Parties contributing ≥ {threshold}% of total revenue"
+    elif top_n:
+        subset = grouped.head(top_n)
+        title = f"Top {top_n} Party Contributors by Revenue"
+    else:
+        subset = grouped.head(5)
+        title = "Top 5 Party Contributors by Revenue"
+
+    lines = [
+        f"**{i+1}. {row['partyname']}** — {format_currency(row['revenue'])} ({row['pct']}%)"
+        for i, row in subset.iterrows()
+    ]
+    summary_text = f"📊 **{title}:**\n" + "\n".join(lines)
+
+    # persist for optional plotting
+    st.session_state.last_grouped_df = subset.rename(columns={"partyname": "Party", "revenue": "value"})[["Party","value"]].copy()
+    st.session_state.last_grouped_title = title
+    st.session_state.last_grouped_kind = "bar"
+    return summary_text
+
 # --- Load data & lists ---
 df = load_data(DATA_PATH)
 party_list = load_list_from_file(PARTY_PATH, df["partyname"] if "partyname" in df.columns else None)
@@ -482,24 +543,32 @@ if user_input:
     else:
         handled = False
 
-    # --- DIRECT DATA QUERIES (unique/list of columns etc.) ---
+    # ---------- PRIORITY: top-ledgers (run before direct data queries) ----------
+    if not handled:
+        top_ledger_resp = handle_top_ledgers_query(df, q)
+        if top_ledger_resp:
+            push_model(top_ledger_resp)
+            if wants_chart and st.session_state.last_grouped_df is not None:
+                plot_chart(st.session_state.last_grouped_df, st.session_state.last_grouped_df.columns[0], "value", st.session_state.last_grouped_title)
+            handled = True
+
+    # ---------- PRIORITY: top-party contributors (run before direct data queries) ----------
+    if not handled:
+        top_party_resp = handle_top_party_contributors(df, q)
+        if top_party_resp:
+            push_model(top_party_resp)
+            if wants_chart and st.session_state.last_grouped_df is not None:
+                plot_chart(st.session_state.last_grouped_df, st.session_state.last_grouped_df.columns[0], "value", st.session_state.last_grouped_title)
+            handled = True
+
+    # ---------- DIRECT DATA QUERIES (unique/list of columns etc.) ----------
     if not handled:
         direct_resp = handle_direct_data_queries(df, q)
         if direct_resp:
             push_model(direct_resp)
             handled = True
 
-    # --- TOP LEDGERS handler (priority after direct queries) ---
-    if not handled:
-        top_ledger_resp = handle_top_ledgers_query(df, q)
-        if top_ledger_resp:
-            push_model(top_ledger_resp)
-            # plot if explicitly requested
-            if wants_chart and st.session_state.last_grouped_df is not None:
-                plot_chart(st.session_state.last_grouped_df, st.session_state.last_grouped_df.columns[0], "value", st.session_state.last_grouped_title)
-            handled = True
-
-    # --- Specific month + year (e.g., April 2020) ---
+    # ---------- Specific month + year (e.g., April 2020) ----------
     if not handled:
         my = extract_monthname_and_year(q)
         if my:
@@ -521,7 +590,7 @@ if user_input:
             st.session_state.last_grouped_kind = "bar"
             handled = True
 
-    # --- Yearwise/monthwise overall or with plot intent ---
+    # ---------- Yearwise/monthwise overall or with plot intent ----------
     if not handled:
         wants_year = bool(re.search(r"\b(yearwise|year\s*wise|year|annual|annually)\b", q))
         wants_month = bool(re.search(r"\b(monthwise|month\s*wise|month|monthly)\b", q))
@@ -546,7 +615,7 @@ if user_input:
                 plot_chart(mdf, "month", "value", "Monthly Revenue (All Data)", kind="bar")
             handled = True
 
-    # --- Generic total revenue queries (no category) ---
+    # ---------- Generic total revenue queries (no category) ----------
     if not handled:
         if re.search(r"\b(total\s+revenue|what\s+is\s+the\s+total\s+revenue|total\s+revenue\s+this\s+month|total\s+revenue\s+in\s+\d{4})\b", q) \
            or ("revenue" in q and ("total" in q or "this month" in q or re.search(r"\b\d{4}\b", q)) and not re.search(r"\b(hostel|mess|canteen|coffee|cantein|coffee lab|party|ledger)\b", q)):
@@ -582,7 +651,7 @@ if user_input:
                 st.session_state.last_grouped_df = None
                 handled = True
 
-    # --- Category / party-based revenue (STRICT matching used) ---
+    # ---------- Category / party / ledger-based revenue (STRICT matching used) ----------
     if not handled and "revenue" in q:
         # First check ledger matches if the question mentions ledger
         matched_ledgers = []
@@ -591,7 +660,11 @@ if user_input:
             # fallback to strict fuzzy on df if none
             if not matched_ledgers:
                 if "ledger_name" in df.columns:
-                    fuzzy_matches = find_party_matches(df.rename(columns={"partyname":"ledger_name"}), q, top_n=8, fuzz_threshold=80, strict=True, require_all_tokens=True)
+                    # use party-matching helper by temporarily renaming df column to reuse function
+                    temp_df = df.copy()
+                    temp_df["partyname"] = temp_df["ledger_name"]
+                    temp_df["_party_norm"] = temp_df["partyname"].map(normalize_text)
+                    fuzzy_matches = find_party_matches(temp_df, q, top_n=8, fuzz_threshold=80, strict=True, require_all_tokens=True)
                     if fuzzy_matches:
                         matched_ledgers = [m[0] for m in fuzzy_matches]
             # relax if still nothing
@@ -690,7 +763,7 @@ if user_input:
                     st.session_state.last_grouped_kind = "bar"
                 handled = True
 
-    # --- Fallback: model-based summary or preview ---
+    # ---------- Fallback: model-based summary or preview ----------
     if not handled:
         if MODEL:
             df_preview = df.head(5).to_string(index=False) if not df.empty else "Dataset is empty or missing."
