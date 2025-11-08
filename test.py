@@ -7,22 +7,28 @@ import os
 from dotenv import load_dotenv
 from typing import List, Optional
 
-# Optional Gemini integration
+# --- Require Gemini AI ---
 try:
     import google.generativeai as genai
-except Exception:
+except Exception as e:
     genai = None
 
-# --- Config ---
 load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
-MODEL = None
-if API_KEY and genai:
-    try:
-        genai.configure(api_key=API_KEY)
-        MODEL = genai.GenerativeModel("gemini-2.0-flash")
-    except Exception:
-        MODEL = None
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# If AI is required, ensure genai is available and key exists
+if genai is None or not GOOGLE_API_KEY:
+    st.set_page_config(page_title="Financial Data Chatbot (AI Required)", page_icon="💬", layout="centered")
+    st.title("Financial Data Chatbot (AI Required)")
+    st.error("Gemini AI integration is required to run this app.\n\n"
+             "1) Install the 'google-generative-ai' package in your environment.\n"
+             "2) Set GOOGLE_API_KEY in your environment or .env file.\n\n"
+             "Once done, restart the app.")
+    st.stop()
+
+# Configure Gemini
+genai.configure(api_key=GOOGLE_API_KEY)
+MODEL = genai.GenerativeModel("gemini-2.5-flash")
 
 # --- Utilities ---
 def safe_lower_strip_replace(col: str) -> str:
@@ -127,6 +133,25 @@ def receipts_payments_net_for_period(df_local: pd.DataFrame, start_ts, end_ts):
     net = receipts - payments
     return receipts, payments, net
 
+def top_entities(df: pd.DataFrame, entity_col: str, n: int = 5) -> pd.DataFrame:
+    if entity_col not in df.columns or df.empty:
+        return pd.DataFrame(columns=[entity_col, "revenue"])
+    rev = df.loc[revenue_mask(df)].copy()
+    top_df = (
+        rev.groupby(entity_col)["amount"]
+        .sum()
+        .reset_index()
+        .rename(columns={"amount": "revenue"})
+        .sort_values("revenue", ascending=False)
+        .head(n)
+        .reset_index(drop=True)
+    )
+    return top_df
+
+def format_rank_table(df: pd.DataFrame, col: str) -> str:
+    lines = [f"{i+1}. {row[col]} — {format_currency(row['revenue'])}" for i, row in df.iterrows()]
+    return "\n".join(lines)
+
 # --- Presentation helpers ---
 def format_currency(val: float) -> str:
     try:
@@ -216,8 +241,8 @@ DATA_PATH = "data/Revenue File.xlsx"
 df = load_data(DATA_PATH)
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="Financial Data Chatbot", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot")
+st.set_page_config(page_title="Financial Data Chatbot (AI Required)", page_icon="💬", layout="centered")
+st.title("Financial Data Chatbot (AI Required)")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -232,7 +257,18 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # --- Chat input ---
-user_input = st.chat_input("Ask about your financial data...")
+user_input = st.chat_input("Ask about your financial data (AI required)...")
+
+def ai_generate_answer(prompt: str) -> str:
+    """Call Gemini to generate a textual answer. Returns text or fallback message."""
+    try:
+        resp = MODEL.generate_content(prompt)
+        if resp and getattr(resp, "text", None):
+            return resp.text
+        # older clients may have choices etc - try to convert to string
+        return str(resp)
+    except Exception as e:
+        return f"(AI generation failed: {str(e)})"
 
 if user_input:
     st.chat_message("user").markdown(user_input)
@@ -246,6 +282,7 @@ if user_input:
     wants_month = bool(re.search(r"\b(monthwise|month\s*wise|month|monthly)\b", q))
 
     def push_model(content: str, display_as_markdown: bool = True):
+        """Send content to UI and save in session history."""
         with st.chat_message("model"):
             if display_as_markdown:
                 st.markdown(content)
@@ -253,7 +290,7 @@ if user_input:
                 st.write(content)
         st.session_state.messages.append({"role": "model", "content": content})
 
-    # -------------- detect specific month + year like "April 2020" --------------
+    # detect specific month + year like "April 2020"
     month_names = {
         "january":1, "february":2, "march":3, "april":4, "may":5, "june":6,
         "july":7, "august":8, "september":9, "october":10, "november":11, "december":12
@@ -267,45 +304,120 @@ if user_input:
             df_filtered = df[(df["date"].dt.year == year_val) & (df["date"].dt.month == month_num)]
             val = df_filtered.loc[revenue_mask(df_filtered), "amount"].sum()
             month_label = month_match.capitalize()
-            resp_text = f"📆 **Revenue for {month_label} {year_val}:** {format_currency(val)}"
-            push_model(resp_text)
+            # Use AI to craft a friendly answer
+            prompt = (f"You are a data analyst. User asked: 'Revenue for {month_label} {year_val}'. "
+                      f"Dataset has {len(df_filtered)} matching rows. Revenue (Receipt/Cr/amount>0) = {val:.2f}. "
+                      f"Respond concisely with one short paragraph stating the amount and any note if zero or no data.")
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
             st.write("")
             chart_df = pd.DataFrame({"month":[f"{month_label} {year_val}"],"value":[val]})
             plot_chart(chart_df, "month", "value", f"Revenue for {month_label} {year_val}", kind="bar")
             st.stop()
         else:
-            push_model("No date column available in dataset to filter by month/year.")
+            prompt = f"User asked for month/year but dataset has no 'date' column."
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
             st.stop()
 
-    # ---------- priority: chart + time tokens -----------
+    # Top-N entities intent (prefer before generic fallbacks)
+    if any(w in q for w in ["top", "highest", "largest", "biggest", "most"]):
+        n_match = re.search(r"\btop\s*(\d+)", q)
+        n = int(n_match.group(1)) if n_match else 5
+
+        if "party" in q and "partyname" in df.columns:
+            top_df = top_entities(df, "partyname", n)
+            prompt = (f"User asked for top {n} parties by revenue. Provide a short natural language list "
+                      f"and include numeric amounts. Data (top rows):\n{top_df.to_string(index=False)}")
+            ai_text = ai_generate_answer(prompt)
+            # show table + AI text
+            push_model("**Top parties (table):**\n\n" + top_df.to_string(index=False))
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+        elif any(col in df.columns for col in ["ledger_name","ledger"]) and "ledger" in q:
+            ledger_col = "ledger_name" if "ledger_name" in df.columns else "ledger"
+            top_df = top_entities(df, ledger_col, n)
+            prompt = (f"User asked for top {n} ledgers by revenue. Provide a concise natural language list "
+                      f"and include numeric amounts. Data (top rows):\n{top_df.to_string(index=False)}")
+            ai_text = ai_generate_answer(prompt)
+            push_model("**Top ledgers (table):**\n\n" + top_df.to_string(index=False))
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+        elif "partyname" in df.columns:
+            top_df = top_entities(df, "partyname", n)
+            prompt = (f"User asked for top {n} parties by revenue (unspecified). Provide a concise natural list "
+                      f"and include numeric amounts. Data (top rows):\n{top_df.to_string(index=False)}")
+            ai_text = ai_generate_answer(prompt)
+            push_model("**Top parties (table):**\n\n" + top_df.to_string(index=False))
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+        else:
+            prompt = "User asked for top entities but dataset lacks partyname/ledger columns."
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+
+    # receipts/payments/net queries
+    if any(w in q for w in ["receipts", "payments", "net", "balance", "inflow", "outflow"]):
+        # detect month+year or year
+        year_m = re.search(r"\b(20\d{2})\b", q)
+        month_m = next((m for m in month_names if m in q), None)
+        if month_m and year_m:
+            mnum = month_names[month_m]
+            yv = int(year_m.group(1))
+            start = pd.Timestamp(year=yv, month=mnum, day=1)
+            end = (start + pd.offsets.MonthEnd(0))
+            receipts, payments, net = receipts_payments_net_for_period(df, start, end)
+            prompt = (f"User requested receipts/payments/net for {month_m.capitalize()} {yv}. "
+                      f"Receipts={receipts:.2f}, Payments={payments:.2f}, Net={net:.2f}. "
+                      "Provide a concise summary sentence + a 2-line recommendation if net is negative.")
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+        elif year_m:
+            yv = int(year_m.group(1))
+            start = pd.Timestamp(year=yv, month=1, day=1)
+            end = pd.Timestamp(year=yv, month=12, day=31, hour=23, minute=59, second=59)
+            receipts, payments, net = receipts_payments_net_for_period(df, start, end)
+            prompt = (f"User requested receipts/payments/net for {yv}. Receipts={receipts:.2f}, Payments={payments:.2f}, Net={net:.2f}. "
+                      "Provide a concise summary sentence + short note on trend.")
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+        else:
+            receipts = df.loc[revenue_mask(df), "amount"].sum() if not df.empty else 0.0
+            payments = df.loc[payments_mask(df), "amount"].sum() if not df.empty else 0.0
+            net = receipts - payments
+            prompt = (f"User requested overall receipts/payments/net. Receipts={receipts:.2f}, Payments={payments:.2f}, Net={net:.2f}. "
+                      "Answer in a concise human-friendly paragraph.")
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
+            st.stop()
+
+    # chart + time tokens (year/month) requests
     if wants_chart and wants_year:
         ydf = compute_revenue_by_year(df)
-        if ydf.empty:
-            push_model("No year-wise revenue data available.")
-        else:
-            summary_text = build_summary(ydf, "year")
-            push_model(summary_text)
-            st.write("")
-            st.write("📈 Year-wise Revenue (All Data)")
+        prompt = (f"User requested a year-wise revenue chart. Provide a one-sentence caption summarizing totals and latest year. "
+                  f"Data:\n{ydf.to_string(index=False)}")
+        ai_text = ai_generate_answer(prompt)
+        push_model(f"**AI Caption:** {ai_text}")
+        if not ydf.empty:
             plot_chart(ydf, "year", "value", "Year-wise Revenue (All Data)", kind="bar")
         st.stop()
 
     if wants_chart and wants_month:
         mdf = compute_revenue_by_month(df)
-        if mdf.empty:
-            push_model("No monthly revenue data available.")
-        else:
-            summary_text = build_summary(mdf, "month")
-            push_model(summary_text)
-            st.write("")
-            st.write("📈 Monthly Revenue (All Data)")
+        prompt = (f"User requested a month-wise revenue chart. Provide a one-sentence caption summarizing trend and top month. "
+                  f"Data (first/last rows):\n{mdf.head(3).to_string(index=False)}\n...\n{mdf.tail(3).to_string(index=False)}")
+        ai_text = ai_generate_answer(prompt)
+        push_model(f"**AI Caption:** {ai_text}")
+        if not mdf.empty:
             plot_chart(mdf, "month", "value", "Monthly Revenue (All Data)", kind="bar")
         st.stop()
 
-    # -------------- follow-ups: year/month (without 'plot' token) --------------
+    # follow-ups for year/month (no plot token)
     if wants_year or wants_month:
         last_keywords = st.session_state.get("last_keywords", [])
-        # If no specific category context -> overall aggregation
         if not last_keywords:
             if wants_month:
                 grouped = compute_revenue_by_month(df)
@@ -315,26 +427,18 @@ if user_input:
                 grouped = compute_revenue_by_year(df)
                 label_kind = "year"
                 title = "Year-wise Revenue (All Data)"
-            if grouped.empty:
-                push_model(f"No {label_kind}-wise data available.")
-            else:
-                summary_text = build_summary(grouped, label_kind)
-                push_model(summary_text)
-                st.write("")
-                st.write(f"📈 {title}")
+            prompt = (f"User requested {label_kind}-wise summary. Provide 2-line summary. Data excerpt:\n{grouped.head(5).to_string(index=False)}")
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
+            if not grouped.empty:
                 plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
             st.stop()
-        # if there were last_keywords earlier, we still support context-based queries
         else:
-            # treat last_keywords as simple terms to match across partyname or ledger if present
             regex = last_keywords_to_regex(last_keywords)
-            # attempt partyname first
             if "partyname" in df.columns:
                 mask = revenue_mask(df) & df["partyname"].str.contains(regex, case=False, na=False)
                 subset = df[mask]
-                if subset.empty:
-                    push_model(f"⚠️ No data found for {' / '.join(last_keywords)}.")
-                    st.stop()
+                total = subset["amount"].sum() if not subset.empty else 0.0
                 if wants_month:
                     grouped = subset.groupby(subset["date"].dt.month)["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"})
                     grouped["month"] = grouped["month"].map({1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"})
@@ -345,42 +449,24 @@ if user_input:
                     grouped["year"] = grouped["year"].astype(int)
                     label_kind = "year"
                     title = f"Year-wise Revenue – {' / '.join(last_keywords)}"
-                grouped = grouped.sort_values(grouped.columns[0]).reset_index(drop=True)
-                summary_text = build_summary(grouped, label_kind)
-                push_model(summary_text)
-                st.write("")
-                st.write(f"📈 {title}")
-                plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
-                st.stop()
-            else:
-                push_model("⚠️ No context column (partyname) to filter by; showing overall instead.")
-                if wants_month:
-                    grouped = compute_revenue_by_month(df)
-                    label_kind = "month"
-                    title = "Month-wise Revenue (All Data)"
-                else:
-                    grouped = compute_revenue_by_year(df)
-                    label_kind = "year"
-                    title = "Year-wise Revenue (All Data)"
-                if grouped.empty:
-                    push_model(f"No {label_kind}-wise data available.")
-                else:
-                    summary_text = build_summary(grouped, label_kind)
-                    push_model(summary_text)
-                    st.write("")
-                    st.write(f"📈 {title}")
+                prompt = (f"User requested {label_kind}-wise for {' / '.join(last_keywords)}. "
+                          f"Total revenue = {total:.2f}. Provide a concise summary sentence and mention top period. Data excerpt:\n{grouped.head(5).to_string(index=False)}")
+                ai_text = ai_generate_answer(prompt)
+                push_model(f"**AI:** {ai_text}")
+                if not grouped.empty:
                     plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
                 st.stop()
 
-    # -------------- generic total revenue queries (no category) --------------
+    # generic total revenue queries
     if re.search(r"\b(total\s+revenue|what\s+is\s+the\s+total\s+revenue|total\s+revenue\s+this\s+month|total\s+revenue\s+in\s+\d{4})\b", q) \
        or ("revenue" in q and ("total" in q or "this month" in q or re.search(r"\b\d{4}\b", q)) and not re.search(r"\b(hostel|mess|canteen|contractor|party)\b", q)):
         if "this month" in q and "date" in df.columns:
             now = pd.Timestamp.now()
             dfm = df[(df["date"].dt.year == now.year) & (df["date"].dt.month == now.month)]
             val = dfm.loc[revenue_mask(dfm), "amount"].sum()
-            resp_text = f"Total revenue for this month ({now.strftime('%Y-%m')}): {format_currency(val)}"
-            push_model(resp_text)
+            prompt = f"User asked total revenue this month ({now.strftime('%Y-%m')}). Amount = {val:.2f}. Give short sentence."
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
             st.stop()
         elif re.search(r"\b(20\d{2})\b", q):
             match = re.search(r"\b(20\d{2})\b", q)
@@ -388,98 +474,58 @@ if user_input:
             if "date" in df.columns:
                 dfy = df[df["date"].dt.year == year]
                 val = dfy.loc[revenue_mask(dfy), "amount"].sum()
-                resp_text = f"Total revenue in {year}: {format_currency(val)}"
-                push_model(resp_text)
+                prompt = f"User asked total revenue in {year}. Amount = {val:.2f}. Give short sentence with one observation."
+                ai_text = ai_generate_answer(prompt)
+                push_model(f"**AI:** {ai_text}")
                 st.stop()
             else:
-                push_model("No date column available to compute year-specific revenue.")
+                ai_text = ai_generate_answer("User requested year-specific total but dataset has no date column.")
+                push_model(f"**AI:** {ai_text}")
                 st.stop()
         else:
             total = compute_total_revenue(df)
-            resp_text = f"Total revenue (all data): {format_currency(total)}"
-            push_model(resp_text)
+            prompt = f"User asked total revenue for all data. Amount = {total:.2f}. Provide a friendly one-line answer."
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
             st.stop()
 
-    # -------------- category / keyword-based revenue --------------
+    # category / keyword-based revenue
     if "revenue" in q:
         keywords = extract_keywords_from_query(q)
         if keywords:
             st.session_state["last_keywords"] = keywords
+            st.session_state["last_context_type"] = None
         else:
             keywords = st.session_state.get("last_keywords", [])
         if not keywords:
-            push_model("⚠️ Please specify a category or party (e.g., 'hostel', 'mess', 'canteen') or ask generic 'total revenue'.")
+            ai_text = ai_generate_answer("User asked for revenue but no category specified. Ask them to specify a party or ledger, or say 'total revenue'.")
+            push_model(f"**AI:** {ai_text}")
             st.stop()
-        # try matching partyname column if present
         regex = last_keywords_to_regex(keywords)
         if "partyname" in df.columns:
             mask = revenue_mask(df) & df["partyname"].str.contains(regex, case=False, na=False)
             subset = df[mask]
             if subset.empty:
-                push_model(f"⚠️ No transactions found for {' / '.join(keywords)}.")
+                ai_text = ai_generate_answer(f"No transactions found for {' / '.join(keywords)} in dataset.")
+                push_model(f"**AI:** {ai_text}")
                 st.stop()
             total = subset["amount"].sum()
             monthly = subset.groupby(subset["date"].dt.to_period("M"))["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"})
             monthly["month"] = monthly["month"].astype(str)
-            monthly = monthly.sort_values("month").reset_index(drop=True)
-            resp_text = f"📊 Total Revenue for {' / '.join(keywords)}: {format_currency(total)}"
-            with st.chat_message("model"):
-                st.write(resp_text)
-                st.markdown(build_summary(monthly, "month"))
-                kind = "bar" if wants_chart else "line"
-                plot_chart(monthly, "month", "value", f"Monthly Trend – {' / '.join(keywords)}", kind=kind)
-            st.session_state.messages.append({"role":"model","content":resp_text})
+            prompt = (f"User requested revenue for {' / '.join(keywords)}. Total={total:.2f}. "
+                      f"Provide a concise AI summary and a short suggestion if trend is down. Data excerpt:\n{monthly.head(5).to_string(index=False)}")
+            ai_text = ai_generate_answer(prompt)
+            push_model(f"**AI:** {ai_text}")
+            plot_chart(monthly, "month", "value", f"Monthly Trend – {' / '.join(keywords)}", kind="bar")
             st.stop()
         else:
-            push_model("⚠️ 'partyname' column not found in dataset; cannot filter by party. Please ask generic revenue queries.")
+            ai_text = ai_generate_answer("Dataset does not have a 'partyname' column to filter by party.")
+            push_model(f"**AI:** {ai_text}")
             st.stop()
 
-    # -------------- receipts/payments/net intent detection --------------
-    if any(w in q for w in ["receipts", "payments", "net", "balance", "inflow", "outflow"]):
-        year_m = re.search(r"\b(20\d{2})\b", q)
-        month_m = next((m for m in month_names if m in q), None) if 'month_names' in locals() else next((m for m in month_names if m in q), None)
-        if month_m and year_m:
-            mnum = month_names[month_m]
-            yv = int(year_m.group(1))
-            start = pd.Timestamp(year=yv, month=mnum, day=1)
-            end = (start + pd.offsets.MonthEnd(0))
-            receipts, payments, net = receipts_payments_net_for_period(df, start, end)
-            resp = f"Receipts: {format_currency(receipts)}\nPayments: {format_currency(payments)}\nNet balance: {format_currency(net)}"
-            push_model(resp, display_as_markdown=False)
-            st.stop()
-        elif year_m:
-            yv = int(year_m.group(1))
-            start = pd.Timestamp(year=yv, month=1, day=1)
-            end = pd.Timestamp(year=yv, month=12, day=31, hour=23, minute=59, second=59)
-            receipts, payments, net = receipts_payments_net_for_period(df, start, end)
-            resp = f"Receipts in {yv}: {format_currency(receipts)}\nPayments in {yv}: {format_currency(payments)}\nNet: {format_currency(net)}"
-            push_model(resp, display_as_markdown=False)
-            st.stop()
-        else:
-            receipts = df.loc[revenue_mask(df), "amount"].sum() if not df.empty else 0.0
-            payments = df.loc[payments_mask(df), "amount"].sum() if not df.empty else 0.0
-            net = receipts - payments
-            resp = f"Total Receipts: {format_currency(receipts)}\nTotal Payments: {format_currency(payments)}\nNet: {format_currency(net)}"
-            push_model(resp, display_as_markdown=False)
-            st.stop()
-
-    # -------------- fallback: use model or preview --------------
-    if MODEL:
-        df_preview = df.head(5).to_string(index=False) if not df.empty else "Dataset empty"
-        context = f"Dataset columns: {', '.join(df.columns) if not df.empty else 'NONE'}\nSample rows:\n{df_preview}"
-        prompt = f"{context}\nUser: {user_input}\nAnswer concisely using dataset context."
-        try:
-            resp = MODEL.generate_content(prompt)
-            ans = resp.text if resp and getattr(resp, "text", None) else "I couldn't generate a response."
-        except Exception:
-            ans = "AI model invocation failed; please re-run or check API key."
-        push_model(ans)
-    else:
-        resp_text = "I couldn't detect a definitive intent. Here are sample rows from the data:"
-        with st.chat_message("model"):
-            st.write(resp_text)
-            if df.empty:
-                st.write("No dataset found at path: " + DATA_PATH)
-            else:
-                st.dataframe(df.head(10))
-        st.session_state.messages.append({"role":"model","content":resp_text})
+    # If nothing matched -> use AI to analyze / suggest from sample
+    df_preview = df.head(10).to_string(index=False) if not df.empty else "Dataset empty or missing."
+    prompt = f"User query: {user_input}\nDataset columns: {', '.join(df.columns) if not df.empty else 'NONE'}\nSample rows:\n{df_preview}\nProvide a concise answer or ask a clarifying question if needed."
+    ai_text = ai_generate_answer(prompt)
+    push_model(f"**AI:** {ai_text}")
+    st.stop()
