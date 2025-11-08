@@ -241,7 +241,7 @@ DATA_PATH = "data/Revenue File.xlsx"
 df = load_data(DATA_PATH)
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="Financial Data Chatbot (AI Required)", page_icon="💬", layout="centered")
+st.set_page_config(page_title="Financial Data Chatbot ", page_icon="💬", layout="centered")
 st.title("Financial Data Chatbot (AI Required)")
 
 if "messages" not in st.session_state:
