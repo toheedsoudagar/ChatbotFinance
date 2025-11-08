@@ -244,7 +244,7 @@ df = ensure_party_norm_in_df(df)
 
 # --- Streamlit UI setup ---
 st.set_page_config(page_title="Financial Data Chatbot", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot — Party-aware (charts only if asked)")
+st.title("Financial Data Chatbot ")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
