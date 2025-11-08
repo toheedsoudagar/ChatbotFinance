@@ -5,9 +5,16 @@ import matplotlib.pyplot as plt
 import re
 import os
 from dotenv import load_dotenv
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-# Optional Gemini integration
+# Optional fuzzy matching (fast). Install: pip install rapidfuzz
+try:
+    from rapidfuzz import process, fuzz
+    _HAS_FUZZ = True
+except Exception:
+    _HAS_FUZZ = False
+
+# Optional Gemini integration (only used for free-text fallback summaries)
 try:
     import google.generativeai as genai
 except Exception:
@@ -24,14 +31,39 @@ if API_KEY and genai:
     except Exception:
         MODEL = None
 
-# --- Utilities ---
-def safe_lower_strip_replace(col: str) -> str:
-    return col.strip().lower().replace(" ", "_")
+# --- Paths (edit if needed) ---
+DATA_PATH = "data/Revenue File.xlsx"
+PARTY_PATH = "/mnt/data/PartyName.txt"  # you uploaded this file — fallback to df if not present
 
-# --- Data loading ---
+# --- Utilities: normalization / text helpers ---
+def normalize_text(s: str) -> str:
+    """Lowercase, remove punctuation, collapse spaces."""
+    if pd.isna(s):
+        return ""
+    s = str(s).lower().strip()
+    s = re.sub(r"[^\w\s]", " ", s)    # remove punctuation
+    s = re.sub(r"\s+", " ", s)        # collapse whitespace
+    return s
+
+def extract_year_from_query(q: str) -> Optional[int]:
+    m = re.search(r"\b(20\d{2})\b", q)
+    return int(m.group(1)) if m else None
+
+def extract_monthname_and_year(q: str) -> Optional[Tuple[int,int]]:
+    month_names = {
+        "january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
+        "july":7,"august":8,"september":9,"october":10,"november":11,"december":12
+    }
+    month_match = next((m for m in month_names if m in q), None)
+    year = extract_year_from_query(q)
+    if month_match and year:
+        return month_names[month_match], year
+    return None
+
+# --- Load dataset ---
 @st.cache_data(ttl=600)
-def load_data(file_path: str = "data/Revenue File.xlsx", sheet_name: str = "Revenue") -> pd.DataFrame:
-    """Load and normalize the dataset. Returns empty DataFrame on failure."""
+def load_data(file_path: str = DATA_PATH, sheet_name: str = "Revenue") -> pd.DataFrame:
+    """Load Excel and normalize columns/ types. Returns empty DataFrame if file missing."""
     if not os.path.exists(file_path):
         return pd.DataFrame()
     try:
@@ -41,91 +73,120 @@ def load_data(file_path: str = "data/Revenue File.xlsx", sheet_name: str = "Reve
             df = pd.read_excel(file_path)
         except Exception:
             return pd.DataFrame()
-    df = df.rename(columns={c: safe_lower_strip_replace(c) for c in df.columns})
+    # normalize column names
+    df.columns = [normalize_text(c).replace(" ", "_") for c in df.columns.astype(str)]
     df = df.dropna(how="all").copy()
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     if "amount" in df.columns:
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+    # ensure strings
     for c in df.select_dtypes(["object"]).columns:
         df[c] = df[c].astype(str).str.strip()
+    # add normalized party column if partyname exists
+    if "partyname" in df.columns:
+        df["_party_norm"] = df["partyname"].fillna("").map(normalize_text)
     return df
 
-# --- Business masks ---
+@st.cache_data(ttl=600)
+def load_party_list(party_path: str = PARTY_PATH, df: pd.DataFrame = None) -> List[str]:
+    """Load party list from text file if present, else derive from df.partyname unique."""
+    if os.path.exists(party_path):
+        try:
+            with open(party_path, "r", encoding="utf-8") as f:
+                lines = [line.strip() for line in f if line.strip()]
+            # normalize duplicates
+            uniq = list(dict.fromkeys(lines))
+            return uniq
+        except Exception:
+            pass
+    # fallback to df
+    if df is not None and "partyname" in df.columns:
+        return df["partyname"].dropna().astype(str).unique().tolist()
+    return []
+
+# --- Business logic mask for revenue ---
 def revenue_mask(df: pd.DataFrame) -> pd.Series:
     """
-    Identify revenue records:
-      - vouchertype == 'receipt'
-      - amount_type == 'cr'
-      - amount > 0
-    Returns boolean Series (False for all if essential columns missing).
+    Revenue rows: vouchertype == 'Receipt', amount_type == 'Cr', amount > 0
+    If columns missing, returns all-False mask.
     """
     if df.empty:
         return pd.Series([False] * 0, index=df.index)
-    if "vouchertype" not in df.columns or "amount_type" not in df.columns or "amount" not in df.columns:
+    if not all(c in df.columns for c in ("vouchertype", "amount_type", "amount")):
         return pd.Series([False] * len(df), index=df.index)
     vt = df["vouchertype"].fillna("").str.lower().str.strip()
     at = df["amount_type"].fillna("").str.lower().str.strip()
     amt = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
     return (vt == "receipt") & (at == "cr") & (amt > 0)
 
-def payments_mask(df: pd.DataFrame) -> pd.Series:
-    """Optional payments mask (vouchertype == 'payment', amount_type == 'dr')."""
-    if df.empty or "vouchertype" not in df.columns or "amount_type" not in df.columns or "amount" not in df.columns:
-        return pd.Series([False] * len(df), index=df.index)
-    vt = df["vouchertype"].fillna("").str.lower().str.strip()
-    at = df["amount_type"].fillna("").str.lower().str.strip()
-    amt = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
-    return (vt == "payment") & (at == "dr") & (amt > 0)
+# --- Party matching helpers ---
+def ensure_party_norm_in_df(df: pd.DataFrame) -> pd.DataFrame:
+    if "partyname" in df.columns and "_party_norm" not in df.columns:
+        df["_party_norm"] = df["partyname"].fillna("").map(normalize_text)
+    return df
 
-# --- Aggregation helpers ---
-def compute_total_revenue(df_local: pd.DataFrame) -> float:
-    if df_local.empty:
-        return 0.0
-    return df_local.loc[revenue_mask(df_local), "amount"].sum()
+def find_party_matches(df: pd.DataFrame, query: str, top_n: int = 10, fuzz_threshold: int = 80) -> List[Tuple[str, float]]:
+    """
+    Returns list of (original_partyname, score).
+    Strategy:
+     - substring exact match on normalized party names (high score)
+     - token presence match (high score)
+     - fuzzy match via rapidfuzz if available (score from 0-100)
+    """
+    q = normalize_text(query)
+    if not q:
+        return []
+    df = ensure_party_norm_in_df(df)
+    matches = []
 
-def compute_revenue_by_month(df_local: pd.DataFrame) -> pd.DataFrame:
-    rev = df_local.loc[revenue_mask(df_local)].copy()
-    if "date" not in rev.columns or rev.empty:
-        return pd.DataFrame(columns=["month", "value"])
-    grouped = rev.groupby(rev["date"].dt.to_period("M"))["amount"].sum().reset_index()
-    grouped["month"] = grouped["date"].astype(str)
-    grouped = grouped.rename(columns={"amount": "value"})[["month", "value"]]
-    grouped = grouped.sort_values("month").reset_index(drop=True)
-    return grouped
+    # direct substring match
+    mask = df["_party_norm"].str.contains(re.escape(q), case=False, na=False)
+    if mask.any():
+        for name in df.loc[mask, "partyname"].unique():
+            matches.append((name, 100.0))
+        # return distinct names in order
+        return matches[:top_n]
 
-def compute_revenue_by_year(df_local: pd.DataFrame) -> pd.DataFrame:
-    rev = df_local.loc[revenue_mask(df_local)].copy()
-    if "date" not in rev.columns or rev.empty:
-        return pd.DataFrame(columns=["year", "value"])
-    grouped = rev.groupby(rev["date"].dt.year)["amount"].sum().reset_index()
-    grouped.columns = ["year", "value"]
-    grouped["year"] = grouped["year"].astype(int)
-    grouped = grouped.sort_values("year").reset_index(drop=True)
-    return grouped
+    # token match: all tokens present in party norm
+    tokens = [t for t in re.findall(r"\w+", q) if len(t) > 2]
+    if tokens:
+        token_mask = df["_party_norm"].apply(lambda s: all(tok in s for tok in tokens))
+        if token_mask.any():
+            for name in df.loc[token_mask, "partyname"].unique():
+                matches.append((name, 95.0))
+            return matches[:top_n]
 
-def compute_revenue_by_month_for_year(df_local: pd.DataFrame, year: int, fill_empty_months: bool = True) -> pd.DataFrame:
-    rev = df_local.loc[revenue_mask(df_local)].copy()
-    if "date" not in rev.columns:
-        return pd.DataFrame(columns=["month", "value"])
-    revy = rev[rev["date"].dt.year == year]
-    month_map = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-                 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
-    if revy.empty:
-        if fill_empty_months:
-            return pd.DataFrame({"month": list(month_map.values()), "value": [0] * 12})
-        return pd.DataFrame(columns=["month", "value"])
-    month_grp = revy.groupby(revy["date"].dt.month)["amount"].sum().reset_index()
-    month_grp.columns = ["month_num", "value"]
-    month_grp["month"] = month_grp["month_num"].map(month_map)
-    if fill_empty_months:
-        df_all = pd.DataFrame({"month_num": list(range(1, 13))})
-        df_all = df_all.merge(month_grp, on="month_num", how="left").fillna({"value": 0})
-        df_all["month"] = df_all["month_num"].map(month_map)
-        return df_all[["month", "value"]]
-    return month_grp[["month", "value"]]
+    # fuzzy fallback
+    if _HAS_FUZZ:
+        candidates = list(df["partyname"].dropna().astype(str).unique())
+        results = process.extract(q, candidates, scorer=fuzz.WRatio, limit=top_n)
+        filtered = [(r[0], float(r[1])) for r in results if r[1] >= fuzz_threshold]
+        if filtered:
+            return filtered
 
-# --- Presentation helpers ---
+    # no matches
+    return []
+
+def find_group_from_query_using_partylist(query: str, party_list: List[str]) -> List[str]:
+    """
+    Try to detect keywords in the query that match a subset of party_list values.
+    Return matched party names (best-effort).
+    """
+    q = normalize_text(query)
+    tokens = [t for t in re.findall(r"\w+", q) if len(t) > 2]
+    if not tokens:
+        return []
+    party_norms = [(p, normalize_text(p)) for p in party_list]
+    matched = set()
+    # If token appears inside normalized party line, pick it
+    for t in tokens:
+        for original, norm in party_norms:
+            if t in norm:
+                matched.add(original)
+    return list(matched)
+
+# --- Presentation helpers (no visuals unless asked) ---
 def format_currency(val: float) -> str:
     try:
         return f"₹{val:,.0f}"
@@ -133,7 +194,6 @@ def format_currency(val: float) -> str:
         return f"₹{float(val):,.2f}"
 
 def plot_chart(df_plot: pd.DataFrame, x_col: str, y_col: str, title: str, kind: str = "bar"):
-    """Matplotlib plotting helper that outputs into Streamlit."""
     if df_plot.empty:
         st.write("No data to plot.")
         return
@@ -177,276 +237,227 @@ def build_summary(grouped: pd.DataFrame, label_kind: str) -> str:
                    f"• Highest in {max_label}: {format_currency(max_val)}")
     return summary
 
-# --- Helpers for keyword extraction and matching ---
-def extract_keywords_from_query(q: str, extra_exclude: Optional[set] = None) -> List[str]:
-    exclude_words = {
-        "revenue", "amount", "total", "show", "what", "is", "the", "for", "by", "month", "year",
-        "in", "of", "from", "this", "that", "wise", "need", "and", "want", "data", "give", "me",
-        "require", "tell", "get", "calculate", "display", "find", "list", "please", "all",
-        "can", "could", "would", "should", "may", "will", "also",
-        "bar", "chart", "barchart", "plot", "line", "graph", "please", "today", "yesterday",
-        "show", "monthly", "annual", "annualy", "yearwise", "monthwise"
-    }
-    if extra_exclude:
-        exclude_words |= extra_exclude
-    words = [w for w in re.findall(r"[a-zA-Z]+", q) if w.lower() not in exclude_words and len(w) > 2]
-    keywords = [w.lower() for w in words if not w.isdigit()]
-    return keywords
-
-def last_keywords_to_regex(keywords: List[str]) -> str:
-    return "|".join(re.escape(k) for k in keywords)
-
-# --- Load dataset ---
-DATA_PATH = "data/Revenue File.xlsx"
+# --- Load data & party list ---
 df = load_data(DATA_PATH)
+party_list = load_party_list(PARTY_PATH, df)
+df = ensure_party_norm_in_df(df)
 
-# --- Streamlit UI ---
+# --- Streamlit UI setup ---
 st.set_page_config(page_title="Financial Data Chatbot", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot ")
+st.title("Financial Data Chatbot — Party-aware (charts only if asked)")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_keywords" not in st.session_state:
-    st.session_state["last_keywords"] = []
+    st.session_state.last_keywords = []
+if "last_grouped_df" not in st.session_state:
+    st.session_state.last_grouped_df = None
+if "last_grouped_title" not in st.session_state:
+    st.session_state.last_grouped_title = None
+if "last_grouped_kind" not in st.session_state:
+    st.session_state.last_grouped_kind = "bar"
 
 # show chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- Chat input ---
+# ---------- helper to push model responses ----------
+def push_model(content: str, display_as_markdown: bool = True):
+    with st.chat_message("model"):
+        if display_as_markdown:
+            st.markdown(content)
+        else:
+            st.write(content)
+    st.session_state.messages.append({"role": "model", "content": content})
+
+# quick follow-up "plot" support: if user types 'plot' show last stored grouped chart
 user_input = st.chat_input("Ask about your financial data...")
 
 if user_input:
-    # record user message
+    # record user
     st.chat_message("user").markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
-    q = user_input.lower()
+    q = user_input.lower().strip()
 
-    # early intent detection
-    viz_terms = {"bar", "chart", "plot", "barchart", "line", "graph"}
+    # explicit visualization request keywords (user must ask to see a chart)
+    viz_terms = {"plot", "chart", "barchart", "bar chart", "line", "graph", "visual", "visualize", "show chart", "show graph"}
     wants_chart = any(t in q for t in viz_terms)
-    wants_year = bool(re.search(r"\b(yearwise|year\s*wise|year|annual|annually)\b", q))
-    wants_month = bool(re.search(r"\b(monthwise|month\s*wise|month|monthly)\b", q))
 
-    # helper to push model output to chat & history
-    def push_model(content: str, display_as_markdown: bool = True):
-        with st.chat_message("model"):
-            if display_as_markdown:
-                st.markdown(content)
-            else:
-                st.write(content)
-        st.session_state.messages.append({"role": "model", "content": content})
-
-    handled = False  # flag to skip further processing when handled
-
-    # -------------- Specific: detect "MonthName + Year" (e.g., "April 2020") --------------
-    month_names = {
-        "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
-        "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12
-    }
-    month_match = next((m for m in month_names if m in q), None)
-    year_match = re.search(r"\b(20\d{2})\b", q)
-
-    if month_match and year_match:
-        month_num = month_names[month_match]
-        year_val = int(year_match.group(1))
-        # filter dataset for that month-year
-        if "date" in df.columns:
-            df_filtered = df[(df["date"].dt.year == year_val) & (df["date"].dt.month == month_num)]
-            val = df_filtered.loc[revenue_mask(df_filtered), "amount"].sum()
+    # quick follow-up: single word "plot" or "show chart" should render last_grouped if any
+    if q in {"plot", "show chart", "show", "visualize", "chart", "plot chart"}:
+        last_df = st.session_state.get("last_grouped_df")
+        last_title = st.session_state.get("last_grouped_title")
+        last_kind = st.session_state.get("last_grouped_kind", "bar")
+        if last_df is not None:
+            push_model(f"📈 Showing chart for: **{last_title}**")
+            plot_chart(last_df, last_df.columns[0], "value", last_title, kind=last_kind)
         else:
-            val = 0.0
-        month_label = month_match.capitalize()
-        resp_text = f"📆 **Revenue for {month_label} {year_val}:** {format_currency(val)}"
-        push_model(resp_text)
-        st.write("")  # spacing
-        chart_df = pd.DataFrame({"month": [f"{month_label} {year_val}"], "value": [val]})
-        plot_chart(chart_df, "month", "value", f"Revenue for {month_label} {year_val}", kind="bar")
+            push_model("No recent result available to plot. Ask a question like 'Year wise revenue' first.")
+        st.session_state.messages.append({"role":"model","content":"(plotted or failed)"})
         handled = True
+        # go next loop
+    else:
+        handled = False
 
-    # -------------- 1) priority: chart + time tokens --------------
-    if not handled and wants_chart and wants_year:
-        last_keywords = st.session_state.get("last_keywords", [])
-        if last_keywords:
-            key_str = last_keywords_to_regex(last_keywords)
-            if "partyname" in df.columns:
-                mask = revenue_mask(df) & df["partyname"].str.contains(key_str, case=False, na=False)
-                subset = df[mask]
-                if subset.empty:
-                    push_model(f"⚠️ No data found for {' / '.join(last_keywords)}.")
-                else:
-                    grouped = subset.groupby(subset["date"].dt.year)["amount"].sum().reset_index().rename(columns={"date": "year", "amount": "value"})
-                    grouped["year"] = grouped["year"].astype(int)
-                    summary_text = build_summary(grouped, "year")
-                    push_model(summary_text)
-                    st.write("")
-                    st.write(f"📈 Year-wise Revenue – {' / '.join(last_keywords)}")
-                    plot_chart(grouped, "year", "value", f"Year-wise Revenue – {' / '.join(last_keywords)}", kind="bar")
-            else:
-                push_model("⚠️ 'partyname' column not found in dataset.")
-        else:
-            ydf = compute_revenue_by_year(df)
-            if ydf.empty:
-                push_model("No year-wise revenue data available.")
-            else:
-                summary_text = build_summary(ydf, "year")
-                push_model(summary_text)
-                st.write("")
-                st.write("📈 Year-wise Revenue (All Data)")
-                plot_chart(ydf, "year", "value", "Year-wise Revenue (All Data)", kind="bar")
-        handled = True
-
-    if not handled and wants_chart and wants_month:
-        last_keywords = st.session_state.get("last_keywords", [])
-        if last_keywords:
-            key_str = last_keywords_to_regex(last_keywords)
-            if "partyname" in df.columns:
-                mask = revenue_mask(df) & df["partyname"].str.contains(key_str, case=False, na=False)
-                subset = df[mask]
-                if subset.empty:
-                    push_model(f"⚠️ No data found for {' / '.join(last_keywords)}.")
-                else:
-                    grouped = subset.groupby(subset["date"].dt.to_period("M"))["amount"].sum().reset_index()
-                    grouped["month"] = grouped["date"].astype(str)
-                    grouped = grouped.rename(columns={"amount": "value"})[["month", "value"]]
-                    grouped = grouped.sort_values("month").reset_index(drop=True)
-                    summary_text = build_summary(grouped, "month")
-                    push_model(summary_text)
-                    st.write("")
-                    st.write(f"📈 Month-wise Revenue – {' / '.join(last_keywords)}")
-                    plot_chart(grouped, "month", "value", f"Month-wise Revenue – {' / '.join(last_keywords)}", kind="bar")
-            else:
-                push_model("⚠️ 'partyname' column not found in dataset.")
-        else:
-            mdf = compute_revenue_by_month(df)
-            if mdf.empty:
-                push_model("No monthly revenue data available.")
-            else:
-                summary_text = build_summary(mdf, "month")
-                push_model(summary_text)
-                st.write("")
-                st.write("📈 Monthly Revenue (All Data)")
-                plot_chart(mdf, "month", "value", "Monthly Revenue (All Data)", kind="bar")
-        handled = True
-
-    # -------------- 2) follow-ups: year/month without explicit 'plot' --------------
-    if not handled and (wants_year or wants_month):
-        last_keywords = st.session_state.get("last_keywords", [])
-        if last_keywords:
-            key_str = last_keywords_to_regex(last_keywords)
-            if "partyname" in df.columns:
-                mask = revenue_mask(df) & df["partyname"].str.contains(key_str, case=False, na=False)
-                subset = df[mask]
-                if subset.empty:
-                    push_model(f"⚠️ No data found for {' / '.join(last_keywords)}.")
-                else:
-                    if wants_month:
-                        grouped = subset.groupby(subset["date"].dt.month)["amount"].sum().reset_index().rename(columns={"date": "month", "amount": "value"})
-                        grouped["month"] = grouped["month"].map({1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
-                                                                 7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"})
-                        label_kind = "month"
-                        title = f"Month-wise Revenue – {' / '.join(last_keywords)}"
-                    else:
-                        grouped = subset.groupby(subset["date"].dt.year)["amount"].sum().reset_index().rename(columns={"date": "year", "amount": "value"})
-                        grouped["year"] = grouped["year"].astype(int)
-                        label_kind = "year"
-                        title = f"Year-wise Revenue – {' / '.join(last_keywords)}"
-                    grouped = grouped.sort_values(grouped.columns[0]).reset_index(drop=True)
-                    summary_text = build_summary(grouped, label_kind)
-                    push_model(summary_text)
-                    st.write("")
-                    st.write(f"📈 {title}")
-                    plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
-            else:
-                push_model("⚠️ 'partyname' column not found in dataset.")
-        else:
-            if wants_month:
-                grouped = compute_revenue_by_month(df)
-                label_kind = "month"
-                title = "Month-wise Revenue (All Data)"
-            else:
-                grouped = compute_revenue_by_year(df)
-                label_kind = "year"
-                title = "Year-wise Revenue (All Data)"
-            if grouped.empty:
-                push_model(f"No {label_kind}-wise data available.")
-            else:
-                summary_text = build_summary(grouped, label_kind)
-                push_model(summary_text)
-                st.write("")
-                st.write(f"📈 {title}")
-                plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
-        handled = True
-
-    # -------------- 3) generic total revenue queries --------------
-    if not handled and (re.search(r"\b(total\s+revenue|what\s+is\s+the\s+total\s+revenue|total\s+revenue\s+this\s+month|total\s+revenue\s+in\s+\d{4})\b", q)
-         or ("revenue" in q and ("total" in q or "this month" in q or re.search(r"\b\d{4}\b", q)) and not re.search(r"\b(hostel|mess|canteen|contractor|party)\b", q))):
-        if "this month" in q and "date" in df.columns:
-            now = pd.Timestamp.now()
-            dfm = df[(df["date"].dt.year == now.year) & (df["date"].dt.month == now.month)]
-            val = dfm.loc[revenue_mask(dfm), "amount"].sum()
-            resp_text = f"Total revenue for this month ({now.strftime('%Y-%m')}): {format_currency(val)}"
-            push_model(resp_text)
-        elif re.search(r"\b(20\d{2})\b", q):
-            match = re.search(r"\b(20\d{2})\b", q)
-            year = int(match.group(1))
+    # ---------- 1) detect specific month + year queries e.g., "April 2020" ----------
+    if not handled:
+        my = extract_monthname_and_year(q)
+        if my:
+            month_num, year_val = my
             if "date" in df.columns:
-                dfy = df[df["date"].dt.year == year]
-                val = dfy.loc[revenue_mask(dfy), "amount"].sum()
+                df_f = df[(df["date"].dt.year == year_val) & (df["date"].dt.month == month_num)]
+                total = df_f.loc[revenue_mask(df_f), "amount"].sum()
+            else:
+                total = 0.0
+            month_label = [k.capitalize() for k,v in {
+                "january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
+                "july":7,"august":8,"september":9,"october":10,"november":11,"december":12
+            }.items() if v == month_num][0]
+            resp_text = f"📆 **Revenue for {month_label} {year_val}:** {format_currency(total)}"
+            push_model(resp_text)
+            # persist last grouped as single-row df for optional plotting
+            chart_df = pd.DataFrame({"month":[f"{month_label} {year_val}"], "value":[total]})
+            st.session_state.last_grouped_df = chart_df
+            st.session_state.last_grouped_title = f"Revenue for {month_label} {year_val}"
+            st.session_state.last_grouped_kind = "bar"
+            handled = True
+
+    # ---------- 2) detect explicit yearwise/monthwise requests (no category) ----------
+    if not handled:
+        wants_year = bool(re.search(r"\b(yearwise|year\s*wise|year|annual|annually)\b", q))
+        wants_month = bool(re.search(r"\b(monthwise|month\s*wise|month|monthly)\b", q))
+
+        # PRIORITY: if user explicitly asked for yearwise/monthwise AND also asked to plot -> show chart
+        if wants_chart and wants_year:
+            ydf = compute_revenue_by_year(df)
+            resp_summary = build_summary(ydf, "year")
+            push_model(resp_summary)
+            # persist for follow-up plot
+            st.session_state.last_grouped_df = ydf.rename(columns={"year":"year","value":"value"}).copy()
+            st.session_state.last_grouped_title = "Year-wise Revenue (All Data)"
+            st.session_state.last_grouped_kind = "bar"
+            # only plot if user explicitly asked for visualization (wants_chart True)
+            if wants_chart:
+                plot_chart(ydf, "year", "value", "Year-wise Revenue (All Data)", kind="bar")
+            handled = True
+
+        elif wants_chart and wants_month:
+            mdf = compute_revenue_by_month(df)
+            resp_summary = build_summary(mdf, "month")
+            push_model(resp_summary)
+            st.session_state.last_grouped_df = mdf.copy()
+            st.session_state.last_grouped_title = "Monthly Revenue (All Data)"
+            st.session_state.last_grouped_kind = "bar"
+            if wants_chart:
+                plot_chart(mdf, "month", "value", "Monthly Revenue (All Data)", kind="bar")
+            handled = True
+
+    # ---------- 3) generic total revenue queries (no category) ----------
+    if not handled:
+        if re.search(r"\b(total\s+revenue|what\s+is\s+the\s+total\s+revenue|total\s+revenue\s+this\s+month|total\s+revenue\s+in\s+\d{4})\b", q) \
+           or ("revenue" in q and ("total" in q or "this month" in q or re.search(r"\b\d{4}\b", q)) and not re.search(r"\b(hostel|mess|canteen|coffee|cantein|coffee lab|party)\b", q)):
+            # this month
+            if "this month" in q and "date" in df.columns:
+                now = pd.Timestamp.now()
+                dfm = df[(df["date"].dt.year == now.year) & (df["date"].dt.month == now.month)]
+                val = dfm.loc[revenue_mask(dfm), "amount"].sum()
+                resp_text = f"Total revenue for this month ({now.strftime('%Y-%m')}): {format_currency(val)}"
+                push_model(resp_text)
+                st.session_state.last_grouped_df = pd.DataFrame({"month":[now.strftime('%Y-%m')],"value":[val]})
+                st.session_state.last_grouped_title = f"Revenue for {now.strftime('%Y-%m')}"
+                st.session_state.last_grouped_kind = "bar"
+                handled = True
+            # explicit year like "in 2024"
+            elif re.search(r"\b(20\d{2})\b", q):
+                match = re.search(r"\b(20\d{2})\b", q)
+                year = int(match.group(1))
+                if "date" in df.columns:
+                    dfy = df[df["date"].dt.year == year]
+                    val = dfy.loc[revenue_mask(dfy), "amount"].sum()
+                else:
+                    val = 0.0
                 resp_text = f"Total revenue in {year}: {format_currency(val)}"
                 push_model(resp_text)
+                # persist grouped months for that year (for follow-up charts)
+                monthly = compute_revenue_by_month_for_year(df, year, fill_empty_months=True)
+                st.session_state.last_grouped_df = monthly.copy()
+                st.session_state.last_grouped_title = f"Monthly Revenue – {year}"
+                st.session_state.last_grouped_kind = "bar"
+                handled = True
             else:
-                push_model("No date column available to compute year-specific revenue.")
-        else:
-            total = compute_total_revenue(df)
-            resp_text = f"Total revenue (all data): {format_currency(total)}"
-            push_model(resp_text)
-        handled = True
+                total = compute_total_revenue(df)
+                resp_text = f"Total revenue (all data): {format_currency(total)}"
+                push_model(resp_text)
+                st.session_state.last_grouped_df = None
+                handled = True
 
-    # -------------- 4) category / keyword-based revenue --------------
+    # ---------- 4) category / party-based revenue (data-driven using provided party list) ----------
     if not handled and "revenue" in q:
-        keywords = extract_keywords_from_query(q)
-        if keywords:
-            st.session_state["last_keywords"] = keywords
-        else:
-            keywords = st.session_state.get("last_keywords", [])
+        # first attempt: detect group-like tokens in query and match against party_list
+        # party_list from file or dataset
+        keywords = [w.lower() for w in re.findall(r"[a-zA-Z]+", q) if len(w) > 2]
+        # attempt direct group detection via party_list contents
+        matched_parties = find_group_from_query_using_partylist(q, party_list)
+        # fallback: fuzzy / substring match on party names (if no direct group hits)
+        if not matched_parties:
+            fuzzy_matches = find_party_matches(df, q, top_n=8, fuzz_threshold=75)
+            if fuzzy_matches:
+                matched_parties = [m[0] for m in fuzzy_matches]
 
-        if not keywords and wants_chart:
-            rbm = compute_revenue_by_month(df)
-            if rbm.empty:
-                push_model("No monthly revenue data available to plot.")
-            else:
-                summary_text = build_summary(rbm, "month")
-                push_model(summary_text)
-                st.write("")
-                plot_chart(rbm, "month", "value", "Monthly Revenue (All Data)", kind="bar")
-        elif not keywords:
-            push_model("⚠️ Please specify a category or party (e.g., 'hostel', 'mess', 'canteen') or ask generic 'total revenue'.")
+        if not matched_parties:
+            push_model("⚠️ No party or category match found in your query. Try phrasing like 'canteen revenue 2023' or provide the party name.")
+            handled = True
         else:
-            key_str = last_keywords_to_regex(keywords)
-            if "partyname" in df.columns:
-                mask = revenue_mask(df) & df["partyname"].str.contains(key_str, case=False, na=False)
-                subset = df[mask]
-                if subset.empty:
-                    push_model(f"⚠️ No transactions found for {' / '.join(keywords)}.")
-                else:
-                    total = subset["amount"].sum()
-                    monthly = subset.groupby(subset["date"].dt.to_period("M"))["amount"].sum().reset_index().rename(columns={"date": "month", "amount": "value"})
-                    monthly["month"] = monthly["month"].astype(str)
-                    monthly = monthly.sort_values("month").reset_index(drop=True)
-                    resp_text = f"📊 Total Revenue for {' / '.join(keywords)}: {format_currency(total)}"
-                    with st.chat_message("model"):
-                        st.write(resp_text)
-                        st.markdown(build_summary(monthly, "month"))
-                        kind = "bar" if wants_chart else "line"
-                        plot_chart(monthly, "month", "value", f"Monthly Trend – {' / '.join(keywords)}", kind=kind)
-                    st.session_state.messages.append({"role": "model", "content": resp_text})
-            else:
-                push_model("⚠️ 'partyname' column not found in dataset.")
-        handled = True
+            # compute filtered revenue
+            mask = df["partyname"].isin(matched_parties) & revenue_mask(df)
+            # allow optional year in query
+            year = extract_year_from_query(q)
+            if year and "date" in df.columns:
+                mask &= df["date"].dt.year == year
+            subset = df.loc[mask].copy()
+            total = subset["amount"].sum() if not subset.empty else 0.0
 
-    # -------------- 5) fallback: AI summary or data preview --------------
+            # summary text
+            party_label = ", ".join(matched_parties[:5]) + ("" if len(matched_parties) <= 5 else f" (+{len(matched_parties)-5} more)")
+            if year:
+                resp_text = f"📊 **Total revenue for {party_label} in {year}:** {format_currency(total)}"
+            else:
+                resp_text = f"📊 **Total revenue for {party_label} (all data):** {format_currency(total)}"
+
+            push_model(resp_text)
+
+            # compute breakdowns for possible follow-ups
+            by_year = subset.groupby(subset["date"].dt.year)["amount"].sum().reset_index().rename(columns={"date":"year","amount":"value"}) if (not subset.empty and "date" in subset.columns) else pd.DataFrame(columns=["year","value"])
+            by_month = subset.groupby(subset["date"].dt.to_period("M"))["amount"].sum().reset_index().rename(columns={"date":"month","amount":"value"}) if (not subset.empty and "date" in subset.columns) else pd.DataFrame(columns=["month","value"])
+            if not by_month.empty:
+                by_month["month"] = by_month["month"].astype(str)
+            # persist last grouped data for optional plotting
+            # prefer monthly breakdown if available, else yearly, else single value df
+            if not by_month.empty:
+                st.session_state.last_grouped_df = by_month[["month","value"]].copy()
+                st.session_state.last_grouped_title = f"Monthly Revenue – {party_label}"
+                st.session_state.last_grouped_kind = "bar"
+                # only show chart if user explicitly asked
+                if wants_chart:
+                    push_model(build_summary(by_month, "month"))
+                    plot_chart(by_month[["month","value"]], "month", "value", st.session_state.last_grouped_title, kind="bar")
+            elif not by_year.empty:
+                st.session_state.last_grouped_df = by_year.copy()
+                st.session_state.last_grouped_title = f"Year-wise Revenue – {party_label}"
+                st.session_state.last_grouped_kind = "bar"
+                if wants_chart:
+                    push_model(build_summary(by_year, "year"))
+                    plot_chart(by_year[["year","value"]], "year", "value", st.session_state.last_grouped_title, kind="bar")
+            else:
+                # single value persisted as one-row df
+                st.session_state.last_grouped_df = pd.DataFrame({"value":[total]})
+                st.session_state.last_grouped_title = f"Revenue – {party_label}"
+                st.session_state.last_grouped_kind = "bar"
+
+            handled = True
+
+    # ---------- 5) fallback: let model produce a helpful natural-language reply or preview data ----------
     if not handled:
         if MODEL:
             df_preview = df.head(5).to_string(index=False) if not df.empty else "Dataset is empty or missing."
@@ -457,17 +468,15 @@ if user_input:
                 ans = resp.text if resp and getattr(resp, "text", None) else "I couldn't generate a response."
             except Exception:
                 ans = "AI model invocation failed; here's a preview of your data instead."
-            with st.chat_message("model"):
-                st.markdown(ans)
-            st.session_state.messages.append({"role": "model", "content": ans})
+            push_model(ans)
         else:
-            resp_text = "I couldn't detect a specific intent. Here are sample rows from the data:"
-            with st.chat_message("model"):
-                st.write(resp_text)
-                if df.empty:
-                    st.write("No dataset found at path: " + DATA_PATH)
-                else:
+            # helpful preview fallback
+            if df.empty:
+                push_model("No dataset found at path: " + DATA_PATH)
+            else:
+                push_model("I couldn't detect a specific intent. Here are sample rows from the data:")
+                with st.chat_message("model"):
                     st.dataframe(df.head(10))
-            st.session_state.messages.append({"role": "model", "content": resp_text})
+        # no need to set handled flag in fallback
 
 # End of script
