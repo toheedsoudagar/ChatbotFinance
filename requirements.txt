@@ -3,3 +3,4 @@ google-generativeai
 pandas
 openpyxl
 python-dotenv
+matplotlib
