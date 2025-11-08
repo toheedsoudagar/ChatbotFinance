@@ -242,7 +242,7 @@ df = load_data(DATA_PATH)
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Financial Data Chatbot ", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot (AI Required)")
+st.title("Financial Data Chatbot")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
