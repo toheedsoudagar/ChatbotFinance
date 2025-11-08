@@ -19,7 +19,7 @@ def load_data(file_path: str, sheet_name: str = "Revenue") -> pd.DataFrame:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df
 
-# --- Revenue Rule ---
+# --- Revenue Logic ---
 def revenue_mask(df):
     return (
         (df["vouchertype"].str.lower() == "receipt")
@@ -27,35 +27,34 @@ def revenue_mask(df):
         & (df["amount"] > 0)
     )
 
-# --- Chart Helper ---
+# --- Helper: currency format and chart ---
 def format_currency(val):
     return f"₹{val:,.0f}"
 
-def plot_revenue_chart(df, x_col, y_col, title, kind="bar"):
+def plot_chart(df, x_col, y_col, title, kind="bar"):
     fig, ax = plt.subplots(figsize=(8, 4))
     plt.tight_layout(pad=3)
 
     if kind == "bar":
         bars = ax.bar(df[x_col], df[y_col], color="#4CAF50", alpha=0.9)
         for bar in bars:
-            height = bar.get_height()
+            h = bar.get_height()
             ax.annotate(
-                format_currency(height),
-                xy=(bar.get_x() + bar.get_width() / 2, height),
+                format_currency(h),
+                xy=(bar.get_x() + bar.get_width()/2, h),
                 xytext=(0, 5),
                 textcoords="offset points",
                 ha="center",
                 fontsize=9,
-                fontweight="bold",
-                color="black",
+                fontweight="bold"
             )
     else:
         ax.plot(df[x_col], df[y_col], marker="o", color="#2196F3", linewidth=2)
-        for i, val in enumerate(df[y_col]):
-            ax.text(i, val, format_currency(val), ha="center", va="bottom", fontsize=9, fontweight="bold")
+        for i, v in enumerate(df[y_col]):
+            ax.text(i, v, format_currency(v), ha="center", va="bottom", fontsize=9, fontweight="bold")
 
     ax.set_xlabel(x_col.capitalize(), fontsize=10)
-    ax.set_ylabel("Revenue (₹)", fontsize=10)
+    ax.set_ylabel("Amount (₹)", fontsize=10)
     ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
     ax.tick_params(axis="x", rotation=45)
     ax.grid(axis="y", linestyle="--", alpha=0.7)
@@ -72,11 +71,14 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Streamlit Setup ---
 st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
-st.title("💬 Financial Data Chatbot (AI + Dynamic Category Search)")
+st.title(" Financial Data Chatbot")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "last_keywords" not in st.session_state:
+    st.session_state["last_keywords"] = []
 
+# --- Show previous chat ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -89,89 +91,98 @@ if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     q = user_input.lower()
 
-    # ========== 1️⃣ Dynamic Keyword-Based Revenue by Party ========== #
-    # Automatically detect if user is asking for revenue of a category or party
-    if "revenue" in q and not re.search(r"\b(20\d{2})\b", q):
-        # Extract keyword candidates (e.g., hostel, mess, contractor, rent, etc.)
+    # ========== 1️⃣ Dynamic Keyword-Based Revenue ========== #
+    if "revenue" in q or any(w in q for w in ["total", "amount", "show"]):
         exclude_words = {
-            "revenue", "amount", "total", "show", "what", "is", "the", "for",
-            "by", "month", "year", "in", "of", "from", "this", "that"
+            "revenue","amount","total","show","what","is","the","for",
+            "by","month","year","in","of","from","this","that","wise"
         }
         words = [w for w in re.findall(r"[a-zA-Z]+", q) if w not in exclude_words and len(w) > 2]
         keywords = [w for w in words if not w.isdigit()]
-        keyword_str = "|".join(keywords)
+
+        # Update or reuse last context keywords
+        if keywords:
+            st.session_state["last_keywords"] = keywords
+        else:
+            keywords = st.session_state.get("last_keywords", [])
 
         if keywords:
-            # Filter data dynamically
+            key_str = "|".join(keywords)
             if "partyname" in df.columns:
-                mask = revenue_mask(df) & df["partyname"].str.contains(keyword_str, case=False, na=False)
+                mask = revenue_mask(df) & df["partyname"].str.contains(key_str, case=False, na=False)
                 subset = df[mask]
-                total = subset["amount"].sum()
                 if subset.empty:
                     with st.chat_message("model"):
                         st.write(f"⚠️ No transactions found for '{' / '.join(keywords)}'.")
                 else:
+                    total = subset["amount"].sum()
                     monthly = (
                         subset.groupby(subset["date"].dt.to_period("M"))["amount"]
                         .sum()
                         .reset_index()
-                        .rename(columns={"date": "month", "amount": "revenue"})
+                        .rename(columns={"date":"month","amount":"value"})
                     )
                     monthly["month"] = monthly["month"].astype(str)
                     with st.chat_message("model"):
                         st.write(f"📊 **Total Revenue for '{' / '.join(keywords)}':** {format_currency(total)}")
                         if not monthly.empty:
-                            plot_revenue_chart(monthly, "month", "revenue", f"Revenue Trend for {' / '.join(keywords)}", kind="bar")
+                            plot_chart(monthly, "month", "value", f"Monthly Trend – {' / '.join(keywords)}", kind="bar")
             else:
                 with st.chat_message("model"):
                     st.write("⚠️ 'partyname' column not found in dataset.")
         else:
-            # No valid keyword found, fallback to general reasoning
-            context = f"""
-            The dataset has {len(df)} rows and columns: {', '.join(df.columns)}.
-            Example data:
-            {df.head(5).to_string(index=False)}
-            """
-            prompt = f"{context}\nUser: {user_input}"
-            response = model.generate_content(prompt)
             with st.chat_message("model"):
-                st.markdown(response.text if response and response.text else "I couldn’t generate a response.")
+                st.write("⚠️ Please specify a valid category or party name.")
 
-    # ========== 2️⃣ Year-specific "Revenue by Month" ========== #
-    elif ("month" in q and re.search(r"\b(20\d{2})\b", q)):
-        match = re.search(r"\b(20\d{2})\b", q)
-        year = int(match.group(1))
-        if "date" in df.columns:
-            dfy = df[df["date"].dt.year == year]
-            if dfy.empty:
-                with st.chat_message("model"):
-                    st.write(f"⚠️ No transactions found for {year}.")
-            else:
-                monthly_rev = (
-                    dfy.loc[revenue_mask(dfy)]
-                    .groupby(dfy["date"].dt.month)["amount"]
-                    .sum()
-                    .reset_index()
-                )
-                monthly_rev.columns = ["month_num", "revenue"]
-                monthly_rev["month"] = monthly_rev["month_num"].map({
-                    1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
-                    7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"
-                })
-                with st.chat_message("model"):
-                    st.write(f"📈 **Revenue by Month for {year}**")
-                    plot_revenue_chart(monthly_rev, "month", "revenue", f"Monthly Revenue – {year}", kind="bar")
+    # ========== 2️⃣ Follow-up: Year-wise / Month-wise / Comparison ========== #
+    elif any(kw in q for kw in ["year", "yearwise", "year wise", "annual", "monthwise", "month wise"]):
+        last_keywords = st.session_state.get("last_keywords", [])
+        if not last_keywords:
+            with st.chat_message("model"):
+                st.write("Please specify what category or party you meant (e.g., 'Hostel', 'Canteen').")
         else:
-            with st.chat_message("model"):
-                st.write("⚠️ No 'date' column found in dataset.")
+            key_str = "|".join(last_keywords)
+            if "partyname" in df.columns:
+                mask = revenue_mask(df) & df["partyname"].str.contains(key_str, case=False, na=False)
+                subset = df[mask]
+                if subset.empty:
+                    with st.chat_message("model"):
+                        st.write(f"⚠️ No data found for '{' / '.join(last_keywords)}'.")
+                else:
+                    if "month" in q:
+                        grouped = (
+                            subset.groupby(subset["date"].dt.month)["amount"]
+                            .sum()
+                            .reset_index()
+                            .rename(columns={"date":"month","amount":"value"})
+                        )
+                        grouped["month"] = grouped["month"].map({
+                            1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
+                            7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"
+                        })
+                        title = f"Month-wise Revenue – {' / '.join(last_keywords)}"
+                    else:
+                        grouped = (
+                            subset.groupby(subset["date"].dt.year)["amount"]
+                            .sum()
+                            .reset_index()
+                            .rename(columns={"date":"year","amount":"value"})
+                        )
+                        title = f"Year-wise Revenue – {' / '.join(last_keywords)}"
 
-    # ========== 3️⃣ Fallback / Other Queries ========== #
+                    with st.chat_message("model"):
+                        st.write(f"📈 **{title}**")
+                        plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
+            else:
+                with st.chat_message("model"):
+                    st.write("⚠️ 'partyname' column not found in dataset.")
+
+    # ========== 3️⃣ Fallback: other reasoning / AI summary ========== #
     else:
         context = f"""
         The dataset has {len(df)} rows and columns: {', '.join(df.columns)}.
         Example data:
         {df.head(5).to_string(index=False)}
-        Use reasoning to answer generic questions about data.
         """
         prompt = f"{context}\nUser: {user_input}"
         response = model.generate_content(prompt)
