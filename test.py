@@ -203,7 +203,7 @@ def make_summary(text_prompt: str) -> str:
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Financial Chatbot (Advanced)", layout="centered")
-st.title("💬 Financial Chatbot — compute & visualize from your data")
+st.title(" Financial Chatbot — compute & visualize from your data")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
