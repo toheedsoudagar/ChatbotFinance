@@ -1,0 +1,612 @@
+PartyName
+Examination Fee From Students
+Hostel and Mess Fee 2019
+Hostel and Mess-2015 Batch
+Hostel and Mess-2018 Batch
+Tuition Fee 2020 Batch Bds
+Other Fee 2020 Batch
+Dental Kit 2020 Batch
+Hostel and Mess 2020 Bds Batch
+Bus Fee
+Mds Other Fee 2021 Batch
+Misc Income
+Income From Miscellanious
+Admission Fee
+Dora Tution Fee 2022 Batch
+Tution Fee 2022 Mds
+Income From Store
+Intrest Received
+Sale of Sambaram Coffe Lab
+Sale Chicken Burger Coffe Lab
+Sale of Snacks
+Sale of Chees Coffe Lab
+Sale of Cone Coffe Lab
+Sale of Pizza Roll Coffe Lab
+Sale of Black Tea Coffe Lab
+Sale of Shake Coffe Lab
+Sale of Smilee Bar Coffe Lab
+Sale of Coffee Coffe Lab
+Sale of Zip Up Coffe Lab
+Sale of Choco Bar Coffe Lab
+Sale of Cake Coffe Lab
+Sale of Lime Coffe Lab
+Sale of Water Coffe Lab
+Sale of  Veg Cutlet Coffe Lab
+Sale of Shawarma Roll Coffe Lab
+Sale of Egg Puff Coffe Lab
+Sale of Duck Roll Coffe Lab
+Sale of Juice Coffe Lab
+Hostel and Mess-2016 Batch
+Hostel and Mess-2017 Batch
+Special Fee 2021 Batch
+Uniform Fee  2022 Batch
+STUDENTS TOUR-MALASIA
+Federal Bank-200000253
+Tution Fee 2021 Batch Bds
+Lakshmi Sayoojya 2019 Bds
+Kripa K (Sc) 2019
+Emil Rose  Thankachan 2019 Bds
+Vismaya D 2019
+Fousiya Fazil 2019
+Devika Aji Bds 2019
+Miscellaneous Income From Store
+Sale of Dark Fantasy Coffe Lab
+Agriculture Income
+Students Fine
+Prostho Updent
+Coffe Lab Income
+Interest Received
+Hostel and Mess Fee 2020 Mds Batch
+Hostel and Mess Fee 2019 Batch
+Hostel and Mess Fee 2020
+Hafeeda Ashrfaf 2017
+Ganga S 2017
+Fadiya Gafoor 2017
+Daya Mary Mammen-2017
+Akhila Dominic 2017
+Anjali R 2017
+Devika AT 2020
+Irshath Fathima 2020
+Supplimentary Fee
+Sreepooja Divakaran 2020
+Ashika.M.A.-2016-MR
+Lekshmi R 2021
+Other Income
+Safwa Rahna -2016
+Gadha-K.S.2016-MGT
+Shelna.A.Habeeb -2016-MR
+Sangeetha .M-2016-MR
+Safada-2016-MR
+Fathima Hakeem -2016-MR
+Mishal Adnan -2016
+Suby Mary Sabu -2016
+Tution Fee Mds 2020
+Hostel and Mess Mds 2019
+Tution Fee Dental Mech 2021 Batch
+Uniform 2021 Batch
+Dora Tution Fee 2021 Batch
+Hostel and Mess 2021 Batch
+Dental Mechanic Tution 2020
+Lakshmi Satheesh 2018 Pg -Conserve
+Hostel and Mess Fee Dora and Dm
+Special Fee 2018 Batch
+Dental Kit 2021 Batch
+Aswathi Babu 2021 (Sc)
+RAKENDU RADHAKRISHNAN 2021(Sc)
+Devika S - 2021(Sc)
+Sreelakshmi Ak (Sc ) 2021
+GOURI JAYAKUMAR  BDS 2021 BATCH(Sc)
+Adithya Ms 2021
+Discount Received
+Jess Mary Varghees-2016
+Noushida-2016-MR
+Thasni Mol 2017
+Sithara Thasni 2017
+Shereena.C-2017
+Shameema 2017
+Rinsa Basheer 2017
+Navya 2017
+Nafia Cm2017
+Hostel and Mess Fee Mds 2021
+Tution Fee 2019 Bds Batch
+Tution Fee 2020 Bds
+Special Fee 2022 Batch
+Tution Fee 2022 Batch
+Hostel and Mess Fee 2022 Bds
+Dora Tutionfee Batch 2023
+Dental Mechanic Tution Fee 2023 Batch
+Special Fee 2019
+Aiswarya Cv (Sc) 2019
+Hostel and Mess Fee 2022 Mds
+Amjitha A P 2019
+Hostel and Mess Fee MDS
+Alumini Association
+Tution Fee 2024 Bds
+Special Fee 2024 Bds
+Shahana Shirin 2022 MLD/ADM/79/22
+Nayanthara 2020 MLD/ADM/93/20
+Lulwa Suman 2022 BDS MLD/ADM/28/22
+Anaina A Meera 2022 Bds MLD/ADM/52/22
+Thomas Geo-2019
+Meera Mu 2020 Sc MLD/ADM/130/20
+Harshna CH 2020 MLD/ADM/10/20
+Hostel and Mess 2023 Batch
+Akash Lovejan 2020 (Oec) MLD/ADM/45/20
+Chinnumol Kb (Sc) 2019
+Arya Rajendran  2020 Oec MLD/ADM/111/20
+Smrithy Joseph 2020 MLD/ADM/86/20
+Sreepooja Divakaran 2020 MLD/ADM/87/20
+Sreepunya K Divakar 2020 MLD/ADM/105/20
+Kavya Pradeep 2020 MLD/ADM/85/20
+Rinsha K V 2020 MLD/ADM/72/20
+Vidya VS  BDS 2018
+Uniform Expense
+Dora Tuiton Fee 2022
+Mohammed Safeer 2022 Dora MLD/DORA/09/22
+Jafer Ali Vm Dora 2022 MLD/DORA/10/22
+Tution Fee 2017 Batch
+Tution Fee Mgt 2016
+Tuition Fee Mds 2018
+Tution Fee Mds-2019 Batch
+Tution Fee-Bds-2018
+Special Fee 2019 Batch
+Special Fee 2020 Batch
+Adarsh -2018 Batch
+Jomol George 2020
+Dental Kit 2022 Batch
+Dental Mechanic Tution Fee 2022 Batch
+Shibina Vv 2022 Bds
+Special Fee 2023 BDS Batch
+Tution Fee 2023 Batch
+Sreya Shaji 2022 Bds
+Gopika Tp 2022 Bds MLD/ADM/73/22
+GOURI JAYAKUMAR  BDS 2021(SC) MLD/ADM/97/21
+Indulekha S 2020 MLD/ADM/19/20
+Anishya Prabhakaran 2020 (Sc) MLD/ADM/116/20
+Priya Elza Manoj 2022 Bds MLD/ADM/38/22
+Arunima Chanthpriya 2020 MLD/ADM/53/20
+Annu Theres Dominic 2022 Bds MLD/ADM/11/22
+Naja Fathima 2022 Bds MLD/ADM/70/22
+Neethu C N 2021 BDS SC MLD/ADM/47/21
+Vishnupriya 2020 Oec MLD/ADM/69/20
+Abisha Md 2022 Bds MLD/ADM/48/22
+Avanthika B 2022 Bds MLD/ADM/84/22
+Gopika Prasad 2020 MLD/ADM/126/20
+Riya Rose 2020 MLD/ADM/109/20
+Amrutha T K-2021 MLD/ADM/92/21
+Abiya Abdulkhader 2020 MLD/ADM/99/20
+Nidhula 2020 Sc MLD/ADM/09/20
+Anjali Jiji Mathew 2020 MLD/ADM/26/20
+Vaishnavi Prem 2020 Oec MLD/ADM/44/20
+Akshara Ramesh 2020 Sc MLD/ADM/104/20
+Manjuna Ap 2020 Oec MLD/ADM/47/20
+Afna Nazeer 2020 MLD/ADM/57/20
+Sanaa Pulikkal 2022 Bds MLD/ADM/03/22
+Vishnu V 2022 Bds MLD/ADM/27/22
+Daya Ms 2020 Sc MLD/ADM/113/20
+Saibu Nissa- 2020 MLD/ADM/118/20
+Vs Meghna 2022 Bds MLD/ADM/87/22
+Dhanalkshmi S  (Oec) 2019
+Silpa Suresh (Sc) 2019
+Reshma K Many 2019 (Oec)
+Sreevarsha P (Sc) 2019
+Sarangi Santosh (Sc) 2019
+Sreelakshmi Ks Bds 2018(Sc)
+GAYATHRI A Anil -Bds  2018 Batch
+Gayathri Sasidharan  2020 Oec MLD/ADM/114/20
+Tution Fee-2016-Merit
+Dora Hostel and Mess Fee
+Dora Fee
+2023 Tution Fee - BDS
+Tuition Fee Mds 2022
+Tuition Fee 2023 Mds
+Dora Tution Fee 2023 Batch
+Mds Fee 2024
+Special Fee 2024 MDS
+Special Fee 2023 Mds
+DM Tuition Fee 2023 Batch
+Rohith Venugopal (Sc) 2019
+Sreeja.P-2023 Mds MLD/MDS/08/23
+Thasneem.A.Abdulrahiman-2016-MR
+Mds Tution Fee 2021
+Special Fee 2022 Mds
+Sale of Vanila Cup Coffe Lab
+Sale of Swiss Roll Coffe Lab
+Parvathy R Krishna (Oec) 2019
+Hostel and Mess Fee 2024 Batch
+Pazhampori Canteen
+Examination Fee Received From Kuhs
+Special Fee MDS 2023
+PURCHASE OF BATTERY
+Scrap Battery Sold
+Principal Mdc&Rc Federal15470200005229
+Sona Rajan 2021(SC)
+ATHULYA P 2021 BDS
+Other Fee Received From Students
+Cash
+Income From Scrap Sale
+Cash-Store
+Chicken Biriyani - Canteen
+Fee From Students
+SAIRA  PA Bds 2018
+Haritha Baiju (Oec) 2019
+Malabar Dental College Pharmacy and Clinic
+SCST-Hostel Fee
+Loan Pharmacy College-15476900000717
+Tds-Contract
+Hostel and Mess-2014 Batch
+Mdc Canteen
+Keerthy M P (Sc) 2019
+Devika S Pallath Bds 2021 MLD/ADM/84/21
+NANDITHA RAJEEVAN BDS 2021 BATCH(Sc)
+Akhil S Kumar ( Sc) 2021 MLD/ADM/63/21
+Neeraja -2018 Batch
+Nathache  2021
+Razim Thahani-2021
+CALVIN JOE 2021
+Anantha Krishnan A 2021
+Meals - Canteen
+Sweets  - Canteen
+Lunch Egg - Canteen
+Aparna.A.C -2021
+Nora C Pulayath-2021 Bds
+ABHISHIKTH BDS 2018 BATCH
+Anupama Pr  (Sc) 2021 MLD/ADM/44/21
+ROSHNI CS 2021 BATCH BDS(Sc)MLD/ADM/94/21
+CDE Income
+Riya Sara Mathew ( Oec) 2021 MLD/ADM/76/21
+Canteen Scrap Sale
+LBS
+Devika S Pallath Bds 2021
+Marry Raj 2021
+Shadiya Nasrin Ec -2021
+AMRUTHA A.P 2021 BATCH BDS
+Samyuktha ( Oec ) 2021 MLD/ADM/49/21
+State Bank of India 30848784883
+Sreya Shaj 2021 MLD/ADM/117/21
+Dental Mech Tution Fee 2019
+Akhila.P-2023 Bds
+Helen Marry Sabu 2021
+Adrija Devi Tk Bds 2021
+Avanthika Vv 2021
+Chandana Ma (Sc) 2021
+Kavya K 2021 (Sc)
+Nanditha Nv 2021
+Naja Fathima 2022 Bds
+Parvathy S 2020 Sc MLD/ADM/43/20
+Akhil S Kumar ( Sc) 2021
+Tuition Fee Mds 2020
+Purchase Return
+Mintu Ca  2020 MLD/ADM/98/20
+J Lekshmi-2021 (Sc)  MLD/ADM/100/21
+NANDITHA RAJEEVAN BDS 2021(Sc) MLD/ADM/91/21
+Sales of Ice Cream Shake Coffe Lab
+Priyam Events Planer
+Akhila Ms 2020 ( Sc) MLD/ADM/59/20
+Manjusha Viswam 2020 Sc MLD/ADM/127/20
+Harichandran Ms (Oec) 2019
+Dental Mech Tuition Fee 2020
+Al Hadeed Traders
+Dm Fee 2020
+Dental Mech Hostel Fee
+Shadilmon Vavanoor
+Aysha Isha Nazeer 2022 Bds MLD/ADM/85/22
+Jayalakshmi Mohan  2020 Oec MLD/ADM/58/20
+Krishnapriya Up 2022 Bds MLD/ADM/50/22
+Noorul Fidha Ek 2022 Bds MLD/ADM/62/22
+Pooja Jaison Bds 2022 MLD/ADM/61/22
+Mohamed Riyas A 2022 Bds MLD/ADM/36/22
+Sreya Shaji 2022 Bds MLD/ADM/37/22
+Swetha 2022 Bds MLD/ADM/64/22
+Aswathy Suresh ( Oec) 2021 MLD/ADM/119/21
+Adithya S 2022  Bds MLD/ADM/55/22
+Ansha Singvi 2022 Bds MLD/ADM/75/22
+Sneha R 2022 MLD/ADM/12/22
+Midhun Madhu 2022 Bds MLD/ADM/19/22
+Vaishnaja K M 2020 MLD/ADM/73/20
+Aryasree J 2022 Bds MLD/ADM/67/22
+Mashitha  2020(Fisheries) MLD/ADM/78/20
+Nandana Jayalekshmi 2022 Bds MLD/ADM/53/22
+Diana B (Sc) 2021 MLD/ADM/120/21
+Thanha Koya Pk 2022 Bds MLD/ADM/69/22
+Saliha Hassan 2022 Bds MLD/ADM/59/22
+Vanditha Das 2022 Bds MLD/ADM/66/22
+Krishnedhu Lal 2022 Bds MLD/ADM/23/22
+Hyma Vg 2020 Sc MLD/ADM/96/20
+Sneha A.R 2022 Bds MLD/ADM/74/22
+Navneet Krishnan 2022 Bds MLD/ADM/51/22
+Anagha Anil 2020 MLD/ADM/42/20
+Nithya K 2022 Bds MLD/ADM/09/22
+Adarza K Anand 2022 Bds MLD/ADM/02/22
+Shibina Vv 2022 Bds MLD/ADM/07/22
+Airin 2022 Bds MLD/ADM/45/22
+Ameen Shahana 2020 MLD/ADM/12/20
+Parvathy PL  2022 Bds MLD/ADM/65/22
+Reshma U (Oec) 2019
+Lakshmi AJ BDS 2019
+Jothish Mon Sp  (Oec) 2019
+Anjana B Nair BDS 2021
+Anupama Pr  (Sc) 2021
+Pedo Programme
+Dr Anugraha 2021( Sc) MLD/MDS/04/21
+Dr Maneesha P.K 2021 ( Sc) MLD/MDS/10/21
+Dr Nimmi Mary Mathew 2021 Conserve MLD/MDS/01/21
+Dr Divya Babu 2021 Ortho MLD/MDS/13/21
+Dr Ashitha CJ 2021 Prostho MLD/MDS/11/21
+Ajanya Tv  (Sc) 2020 MLD/ADM/79/20
+Rent Recieved
+Indu M 2017
+Interest on FD -15470400008072
+INTEREST ON  15470400008080
+Interest-Fd-15470400008098
+FD INTEREST 15470400008106
+FD INTEREST 15470400008122
+Interest-Fd-15470400008114
+Interest  Fd-15470400008130
+Fathimath Shabana- 2015
+Malavika Jijo 2022 Bds
+Akshaya 2020 (Oec) MLD/ADM/97/20
+Lunch Fish - Canteen
+Lays - Canteen
+Ghee Rice & Chicken - Canteen
+Break fast - Canteen
+Vishnupriya 2020 Oec
+Unbilled Collection
+Sanika Ajay 2020 Oec MLD/ADM/70/20
+Bagi Gireesh  2020 Oec MLD/ADM/88/20
+Cash Trust
+Reshmi Tr 2020 Sc MLD/ADM/83/20
+INCEPTRA  CONTRIBUTION FROM PARTIES
+Anupama V(SC/ST) 2017
+Sayooj TP Bds 2018(Oec)
+Sandra Saigal-Bds 2018 (OEC)
+Vidhya Kiran(SC/ST) 2017
+Aysha-2017
+Anagha Devanand (Sc) 2019
+Nandana M 2020 Sc MLD/ADM/129/20
+Tution Fee Mgt 2015
+Lakshmi Ks Bds 2018 (Sc)
+Bindu Steel Furniture
+Cafeteria
+Swathi Sanjeev 2020 Sc MLD/ADM/07/20
+Aparna Prasad 2020 Sc MLD/ADM/90/20
+Arya Lakshmi R 2022 Bds MLD/ADM/56/22
+Aswin P  Viji-2021 MLD/ADM/96/21
+Hiba Hussain -Bds 2018
+AISWARYA SURESH  BDS 2018 BATCH
+Bismi Electricals
+OD-Federal Bank -15475500001851
+Christina Cs BDS 2021
+Chandhini V  (Oec) 2019
+Hostel and Mess-2013 Batch
+Sneha R 2022
+Megha Pradeep 2021
+Insurance Claim
+Jyothi Lakshmi  A  2020 Oec
+Hima M 2020 (Sc)
+Anjali S Nair 2022 Bds
+Aswin Ss 2020 Oec
+Smrithy Joseph 2020
+Anishya Prabhakaran 2020 (Sc)
+Ameen Shahana 2020
+Saibu Nissa- 2020
+Akhila Ms 2020 ( Sc)
+Aparna Prasad 2020 Sc
+ANJU K 2022 BDS
+Riya Rose 2020
+Jayalakshmi Mohan  2020 Oec
+Sanaa Pulikkal 2022 Bds
+Arya Rajendran  2020 Oec
+Devika Shekar 2020
+Vaishnavi Prem 2020 Oec
+Hyma Vg 2020 Sc
+Manjuna Ap 2020 Oec
+Manjima 2022 Bds
+Arunima Chanthpriya 2020
+Nidhula 2020 Sc
+Sharan Thankappan 2020 Oec
+Karthikeyan M  2020 Sc
+Akash Lovejan 2020 (Oec)
+Calvin Antony  2020
+Anjali Jiji Mathew 2020
+Gopika Prasad 2020
+Sasirekha Ts 2020
+Sanjana -2016
+Rintu James  (Oec) 2019
+Meenu Mohan (Sc) 2019
+Aiswarya K  ( Sc)  2019
+Gopika Ks (Oec) 2019
+Aiswarya E S ( Oec) 2019
+Ashfana Vp 2017
+Divya Das(SC/ST) 2017
+Tom Thomas 2017
+Aiswarya Babu(ST/SC) 2017
+Sruthi C Bds 2018 (OEC)
+Akshaya-BDS 2018 BATCH
+LEYA JOY BDS 2018
+Gopika Deepak Bds 2018
+Sandra PS Bds 2018 (SC)
+Lekshmi R Bds 2018 (OEC)
+NANDANA BDS 2018(OEC)
+Sredha R Babu. Bds2018 (SC)
+Malavika Ks Bds 2018 (Sc)
+Praseeda Prasad Bds  2018
+Sajna PS Bds  2018
+Arya Lakshmi Bds 2018 Batch
+Lakshmi Sabu 2021 (Sc)
+MDC-Cafeteria
+Malini Devi 2020 Sc MLD/ADM/102/20
+Shahana Zainudheen -2016-MGT
+Fee MDS 2023
+Anumol Jiya Samuel-2021
+Dr Anjali N Ortho Sc 2020
+Dr Anagha Conserve -2020 Sc
+Souparnika-2016-SC
+Dr Neenu Conserve 2020 Sc
+JENCY ELMA GEORGE-2018(SC)
+Saranya Balachandran (St) 2019
+Meera Mu 2020 Sc
+Income From -Library
+Arya M 2020 Sc MLD/ADM/123/20
+Risma Shoukath-2016-MR
+Hostel and Mess Fee 2024 Batch MDS
+Amalendhu 2021
+Alin Raj ( Sc) 2021
+Anupam K Anil (Oec) 2021
+Aswin P  Viji-2021
+Hridhya Sandriya ( Oec) 2021
+Karthik  2020
+Income Frm  Crscent  Plaza
+SUBIN DEV Bds 2018
+Sreeshma Tm (Oec) 2019
+Arunima Venu  (Oec) 2019
+Gowri Anil 2019 Bds
+Adithya C (Oec) 2020 MLD/ADM/91/20
+Sasirekha Ts 2020 MLD/ADM/89/20
+Jomol George 2020 MLD/ADM/66/20
+Jyothika Krishna  2020 Sc MLD/ADM/122/20
+Deepthi Raj 2020 Sc MLD/ADM/46/20
+Adithya Madhav (Oec) 2020 MLD/ADM/124/20
+Krithik 2020 MLD/ADM/115/20
+Pooja P Raj  2020 Oec MLD/ADM/61/20
+Chandana Ma (Sc) 2021 MLD/ADM/50/21
+Anjana B Nair BDS 2021 MLD/ADM/68/21
+Helen Marry Sabu 2021 MLD/ADM/99/21
+AKSHAYA PA (Oec) 2021 MLD/ADM/09/21
+Athulya P 2021 Bds MLD/ADM/124/21
+Lekshmi R 2021 MLD/ADM/64/21
+Chandana Tv (Sc) 2021 MLD/ADM/28/21
+Alin Raj ( Sc) 2021 MLD/ADM/65/21
+Marry Raj 2021 MLD/ADM/67/21
+San Treasa Varghese 2021 MLD/ADM/113/21
+Parvathi K 2021 Sc MLD/ADM/116/21
+Sreelakshmi H  (Oec) 2021 MLD/ADM/59/21
+Shilji 2021 MLD/ADM/79/21
+Adithya Ms 2021 MLD/ADM/107/21
+Lakshmi Sabu 2021 (Sc) MLD/ADM/110/21
+Shadiya Nasrin Ec -2021 MLD/ADM/16/21
+Kavya K 2021 (Sc) MLD/ADM/43/21
+Adrija Devi Tk Bds 2021 MLD/ADM/51/21
+Aswathi Babu 2021 (Sc) MLD/ADM/106/21
+Rinsana P 2021 MLD/ADM/118/21
+Razim Thahani-2021 MLD/ADM/122/21
+Abhishek K Babu ( Oec) 2021 MLD/ADM/70/21
+Thinkal Jayan  ( Sc) 2021 MLD/ADM/48/21
+Anupam K Anil (Oec) 2021 MLD/ADM/54/21
+CALVIN JOE 2021 MLD/ADM/89/21
+Nanditha Nv 2021 MLD/ADM/111/21
+Hridhya Sandriya ( Oec) 2021 MLD/ADM/46/21
+Amalendhu RJ - MLD/ADM/35/21
+Anmol Jiya Samuel-2021 MLD/ADM/34/21
+Hima  Bs Bds 2021 MLD/ADM/56/21
+Megha Pradeep 2021 MLD/ADM/10/21
+Nora C Pulayath-2021 Bds MLD/ADM/66/21
+Aparna.A.C -2021 MLD/ADM/40/21
+Avanthika Vv 2021MLD/ADM/115/21
+Christina Cs BDS 2021MLD/ADM/90/21
+Navya A 2022 Bds MLD/ADM/60/22
+Anagha Pp 2022 Bds MLD/ADM/47/22
+Basteena  2022 Bds MLD/ADM/42/22
+Anagha S Das 2022 Bds MLD/ADM/68/22
+Anjana R  2022 Bds MLD/ADM/16/22
+Sreedevi P Das 2020 Sc MLD/ADM/14/20
+Arya Haridas 2020 Sc MLD/ADM/63/20
+Sreya Shaj 2021
+\
+Reshma Rajan-2021
+Dr Anagha 2020
+Amalu R (Oec)  2019
+Anju M Bds 2018 Batch (SC)
+Amrutha Sajeev- 2018 Bds
+Kavitha Sabu Bds 2018
+MDS 2023 TUITION FEE
+MDS 2022 TUITION FEE
+Purchase of Snacks Coffe Lab
+Loan-0543
+AKSHAYA KS  BDS 2021 BATCH
+Sree Lakshmi  R.S  BDS 2018
+Reshmi.E-2016-MR
+Anjana Ps  2020 Sc MLD/ADM/108/20
+Rameena  2018-D/M
+Devi Joshi MDS 2019
+VINDUJA V PG CONSERVE 2019
+Rajalakshmi Tr  (Oec) 2019
+Nikitha Marry Saiju 2019
+Aksa Anna Alaxander BDS 2019
+Amrutha Ashok 2019 Bds
+Aneeta Nelson (Oec) 2019
+Sale of Chicken Cutlet Coffeelab
+Cup Ice
+JITH POWER HOME
+Arsha K  Isac-2017
+Haneena Hasin.EK-2017
+Asna Ashraf 2017
+Asiya Khan 2021
+Hima  Bs Bds 2021
+Amrutha T K-2021
+Aswathy Suresh ( Oec) 2021
+Bhavya Raju 2021
+Neethu C N 2021 BDS SC
+Athira Santhosh 2022 Dora MLD/DORA/02/22
+Anjana R V 2022 Dora MLD/DORA/07/22
+Aysha Javada Dora 2023 MDC/DORA/08/23
+Anjima Babu 2020 Sc
+Valanchery Battery House
+Aswin Vp 2020  Sc
+Sisira Krishnan (Sc/st) 2017
+Adila Sherin 2021 D/m
+Rinsana P 2021
+Pranav Prasanth Bds 2023 Batch MLD/ADM/77/23
+Vijishna Kk 2020 Oec MLD/ADM/55/20
+Kalliyath Sanitations
+Hisana -Bds 2018 Batch
+Hostel &Mess Fees DM/DORA/DH
+Expert Trading Co
+Thanooja 2015
+Annu Theres Dominic 2022 Bds
+Wafa Chatheri 2023 Bds MLD/ADM/96/23
+Aswani K 2020 Sc MLD/ADM/128/20
+Neha Pappan  (Sc) 2019
+Chandana Tv (Sc) 2021
+Karshakasree - Coffeelab
+Minnu 2020 Oec MLD/ADM/106/20
+Fee Cash
+Bank Service Charge Refund
+Diana B (Sc) 2021
+Sreedevi P Das 2020 Sc
+Haritha Rajan -2016
+Aleesha-Admit-2016
+Sundry Creditors Write Off
+Roshin Jayan-2023 Bds MLD/ADM/49/23
+Priya Elza Manoj 2022 Bds
+Akshay Raj  (Oec) 2019
+Ajoy U ( Oec) 2019
+Nivedhya.K.B-2019
+SREYA MR 2019 BDS
+SANJITHA S NAIR BDS 2019
+Smruthy Ts (Sc) 2019
+Hasna Sherin Ptv 2022 Bds MLD/ADM/81/22
+Other Fee Mds 2019
+BDS 2021 BATCH
+Rohini 2015
+Shyamna-B.S.-2015
+Vijisha 2015
+Vismaya Vishnudas 2015
+Henna Milton  2017
+Dr Arun-2020 -Tc Issued
+Haritha Das -2013
+Amrutha Kannan 2015
+Naseeba 2015
+Rose Mary Tomy 2015
+Bhagyalakshmi 2015
+MDS 2021 TUITION FEE
+Sreejith Sundry Creditor
+Sain Architect and Engineers
+New Mccs -Cctv Camera-Microtel
+Abdulla Dora-2020
+Tony Tharakan Sundry Creditor
+Agna Ramesh (Oec) 2020
+Exam Fee Cash
+DM Tuition Fees 2024 Batch
+Dora Tuition Fees 2024 Batch
+DH Tuition Fees 2024 Batch
