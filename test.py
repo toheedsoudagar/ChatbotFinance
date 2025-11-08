@@ -71,7 +71,7 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Streamlit Setup ---
 st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
-st.title("💬 Financial Data Chatbot (AI + Context Memory + Summaries)")
+st.title(" Financial Data Chatbot ")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
