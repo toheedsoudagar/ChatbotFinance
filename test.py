@@ -27,7 +27,7 @@ def revenue_mask(df):
         & (df["amount"] > 0)
     )
 
-# --- Helper: currency format and chart ---
+# --- Chart Helpers ---
 def format_currency(val):
     return f"₹{val:,.0f}"
 
@@ -71,7 +71,7 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Streamlit Setup ---
 st.set_page_config(page_title="Financial Chatbot", page_icon="💬", layout="centered")
-st.title(" Financial Data Chatbot")
+st.title(" Financial Data Chatbot ")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -100,7 +100,7 @@ if user_input:
         words = [w for w in re.findall(r"[a-zA-Z]+", q) if w not in exclude_words and len(w) > 2]
         keywords = [w for w in words if not w.isdigit()]
 
-        # Update or reuse last context keywords
+        # Save or reuse context keywords
         if keywords:
             st.session_state["last_keywords"] = keywords
         else:
@@ -134,7 +134,7 @@ if user_input:
             with st.chat_message("model"):
                 st.write("⚠️ Please specify a valid category or party name.")
 
-    # ========== 2️⃣ Follow-up: Year-wise / Month-wise / Comparison ========== #
+    # ========== 2️⃣ Follow-up: Year-wise / Month-wise ========== #
     elif any(kw in q for kw in ["year", "yearwise", "year wise", "annual", "monthwise", "month wise"]):
         last_keywords = st.session_state.get("last_keywords", [])
         if not last_keywords:
@@ -171,13 +171,34 @@ if user_input:
                         title = f"Year-wise Revenue – {' / '.join(last_keywords)}"
 
                     with st.chat_message("model"):
+                        # --- 🧮 Summary before chart ---
+                        total_rev = grouped["value"].sum()
+                        max_row = grouped.loc[grouped["value"].idxmax()]
+                        max_label = str(max_row[grouped.columns[0]])
+                        max_val = max_row["value"]
+
+                        if "year" in grouped.columns[0].lower():
+                            summary = (
+                                f"📅 **Year-wise Summary:**\n"
+                                f"• Total revenue across all years: {format_currency(total_rev)}\n"
+                                f"• Highest in {max_label}: {format_currency(max_val)}"
+                            )
+                        else:
+                            summary = (
+                                f"📆 **Month-wise Summary:**\n"
+                                f"• Total revenue across all months: {format_currency(total_rev)}\n"
+                                f"• Highest in {max_label}: {format_currency(max_val)}"
+                            )
+
+                        st.markdown(summary)
+                        st.write("")  # spacing
                         st.write(f"📈 **{title}**")
                         plot_chart(grouped, grouped.columns[0], "value", title, kind="bar")
             else:
                 with st.chat_message("model"):
                     st.write("⚠️ 'partyname' column not found in dataset.")
 
-    # ========== 3️⃣ Fallback: other reasoning / AI summary ========== #
+    # ========== 3️⃣ General reasoning fallback ========== #
     else:
         context = f"""
         The dataset has {len(df)} rows and columns: {', '.join(df.columns)}.
