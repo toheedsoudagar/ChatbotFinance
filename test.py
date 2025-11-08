@@ -256,7 +256,7 @@ def detect_exact_entity(query: str):
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Financial Data Chatbot", page_icon="💬", layout="centered")
-st.title("Financial Data Chatbot 🔨🤖🔧")
+st.title("Financial Data Chatbot ")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
